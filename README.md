@@ -11,21 +11,32 @@ A standalone MCP proxy that makes tool loading intelligent. Sessions start with 
 3. As conversation context arrives, semantic routing surfaces relevant tools automatically
 4. The LLM can always fall back to `discover_tools` for explicit search
 
+```mermaid
+flowchart TD
+    Client["Claude Code\n(LLM client)"]
+    TS["Toolstream Proxy\n─────────────────\nSemantic Router\nSession Manager\nTool Registry\nHealth Monitor"]
+    GH["GitHub MCP Server"]
+    OB["Obsidian MCP Server"]
+    OT["Other MCP Servers..."]
+    TG["Telegram Bot API"]
+
+    Client -- "stdio (3 meta-tools)" --> TS
+    TS -- "stdio" --> GH
+    TS -- "stdio" --> OB
+    TS -- "stdio" --> OT
+    TS -- "HTTPS (alerts)" --> TG
+```
+
 ## Quick Start
 
 ```bash
-# Install
+git clone https://github.com/tylerwilliamwick/toolstream.git
+cd toolstream
 npm install
-
-# Configure upstream servers
+npm run build
 cp toolstream.config.yaml my-config.yaml
 # Edit my-config.yaml with your MCP servers
-
-# Build
-npm run build
-
-# Run
-node dist/index.js my-config.yaml
+node dist/index.js start my-config.yaml
 ```
 
 ## Configuration
