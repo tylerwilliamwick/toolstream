@@ -41,10 +41,10 @@ or just no errors at all. If you see TypeScript errors, check that your Node.js 
 ## Copy the config template
 
 ```bash
-cp toolstream.config.yaml my-config.yaml
+cp toolstream.config.example.yaml toolstream.config.yaml
 ```
 
-You'll edit `my-config.yaml` in the next step. Don't edit `toolstream.config.yaml` directly; it's the reference template.
+You'll edit `toolstream.config.yaml` in the next step. The `.example.yaml` file is the reference template; your copy is yours to customize.
 
 ---
 

@@ -1,6 +1,6 @@
 # First Config
 
-ToolStream uses a single YAML file for all configuration. MCP (Model Context Protocol) is the standard that lets AI assistants connect to external services; each service you connect is called an "MCP server." This guide walks through each section of `toolstream.config.yaml` and explains what each field does.
+ToolStream uses a single YAML file for all configuration. MCP (Model Context Protocol) is the standard that lets AI assistants connect to external services; each service you connect is called an "MCP server." This guide walks through each section of the config file and explains what each field does.
 
 ---
 

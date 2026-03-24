@@ -1,4 +1,9 @@
-# toolstream.config.yaml - All servers proxied (github, obsidian, atlassian)
+# toolstream.config.example.yaml
+#
+# Copy this file and customize it for your setup:
+#   cp toolstream.config.example.yaml toolstream.config.yaml
+#
+# Then update the paths and server entries below.
 
 toolstream:
   transport:
@@ -19,9 +24,10 @@ toolstream:
 
   storage:
     provider: "sqlite"
-    sqlite_path: "/Users/tylerwick/projects/toolstream/toolstream.db"
+    sqlite_path: "./toolstream.db"       # Relative to where you run the process
 
 servers:
+  # GitHub MCP Server
   - id: "github"
     name: "GitHub"
     transport: "stdio"
@@ -31,14 +37,16 @@ servers:
       type: "none"
     env_passthrough: ["GITHUB_PERSONAL_ACCESS_TOKEN"]
 
+  # Obsidian MCP Server (optional, remove if you don't use Obsidian)
   - id: "obsidian"
     name: "Obsidian"
     transport: "stdio"
     command: "npx"
-    args: ["-y", "@mauricio.wolff/mcp-obsidian", "/Users/tylerwick/Vault"]
+    args: ["-y", "@mauricio.wolff/mcp-obsidian", "/path/to/your/vault"]  # Replace with your vault path
     auth:
       type: "none"
 
+  # Atlassian MCP Server (Jira + Confluence)
   - id: "mcp-atlassian"
     name: "Atlassian (Jira + Confluence)"
     transport: "stdio"
