@@ -116,7 +116,7 @@ export MY_API_KEY="your-key-here"
 
 ## Keeping secrets out of config files
 
-Never put actual token values in your `toolstream.config.yaml`. Always use `token_env` to point to an environment variable. This way:
+Never put actual token values in your config file. Always use `token_env` to point to an environment variable. This way:
 
 - Your config file can be committed to version control safely.
 - Your tokens stay in your shell environment or a `.env` file you don't commit.

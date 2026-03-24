@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Full reference for every field in `toolstream.config.yaml`.
+Full reference for every field in the ToolStream config file (`toolstream.config.example.yaml`).
 
 ---
 

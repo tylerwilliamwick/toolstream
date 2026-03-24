@@ -20,7 +20,7 @@ ToolStream can send messages to a Telegram chat when servers go down, recover, o
 
 ---
 
-## Configure in toolstream.config.yaml
+## Configure in your toolstream config
 
 Add a `notifications` section under `toolstream`:
 

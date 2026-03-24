@@ -41,7 +41,7 @@
 - The env var name in your config does not match what is set in your shell. Check capitalization.
 - The token does not have the right scopes. GitHub tokens need specific scopes for each API operation.
 
-**Fix:** Verify your token works by testing it directly: `curl -H "Authorization: Bearer $YOUR_TOKEN" https://api.github.com/user`. If that works, check that the env var name in `toolstream.config.yaml` matches exactly.
+**Fix:** Verify your token works by testing it directly: `curl -H "Authorization: Bearer $YOUR_TOKEN" https://api.github.com/user`. If that works, check that the env var name in your config file matches exactly.
 
 ## Still Using Too Many Tokens
 
