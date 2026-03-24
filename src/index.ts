@@ -11,6 +11,7 @@ Usage:
   toolstream init                    Create a new config file interactively
   toolstream add-server              Add a server to an existing config
   toolstream health                  Check server health from the database
+  toolstream doctor [config]         Validate Toolstream setup
   toolstream --help                  Show this help
 
 Options:
@@ -67,6 +68,13 @@ async function main(): Promise<void> {
     case "health": {
       const { healthCommand } = await import("./cli/health.js");
       await healthCommand();
+      break;
+    }
+
+    case "doctor": {
+      const { runDoctor } = await import("./cli/doctor.js");
+      const configFile = positionals[1] || "toolstream.config.yaml";
+      await runDoctor(configFile);
       break;
     }
 

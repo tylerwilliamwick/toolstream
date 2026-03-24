@@ -13,11 +13,30 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tylerwilliamwick/toolstream.git"
+  },
+  "homepage": "https://github.com/tylerwilliamwick/toolstream#readme",
+  "bugs": {
+    "url": "https://github.com/tylerwilliamwick/toolstream/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "keywords": [
     "mcp",
-    "tool-loading",
     "proxy",
-    "semantic-routing"
+    "toolstream",
+    "token-savings",
+    "semantic-routing",
+    "model-context-protocol"
   ],
   "author": "",
   "license": "MIT",
