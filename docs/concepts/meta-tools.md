@@ -1,6 +1,6 @@
 # Meta-Tools
 
-ToolStream always exposes exactly 3 tools to the LLM, regardless of how many upstream servers or tools are configured. These meta-tools give the LLM full visibility and control without loading every schema upfront.
+ToolStream always exposes exactly 4 tools to the LLM, regardless of how many upstream servers or tools are configured. These meta-tools give the LLM full visibility and control without loading every schema upfront.
 
 ---
 
@@ -127,6 +127,38 @@ The output is whatever the upstream tool returns. ToolStream passes it through u
   "state": "open"
 }
 ```
+
+---
+
+## `reconnect_server`
+
+Force-reconnects a specific upstream server. Use this when a server has gone offline and you want to restore the connection without restarting ToolStream.
+
+**When to use it:** when `execute_tool` returns a `server_not_connected` or `server_reconnecting` error, or when `discover_servers` shows a server is down.
+
+**Input:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `server_id` | string | yes | Server ID from `discover_servers` |
+
+**Example call:**
+```json
+{
+  "server_id": "github"
+}
+```
+
+**Example output:**
+```json
+{
+  "status": "reconnected",
+  "serverId": "github",
+  "toolCount": 31
+}
+```
+
+If the reconnect fails after all retry attempts, the output will include an error message explaining why.
 
 ---
 

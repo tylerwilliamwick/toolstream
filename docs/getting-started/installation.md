@@ -17,7 +17,7 @@ If the output is `v20.x.x` or higher, you're set. If it's lower, or if the comma
 Clone the repo and install dependencies:
 
 ```bash
-git clone https://github.com/your-org/toolstream.git
+git clone https://github.com/tylerwilliamwick/toolstream.git
 cd toolstream
 npm install
 ```

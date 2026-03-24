@@ -1,6 +1,6 @@
 # Claude Code Setup
 
-This guide walks you through connecting ToolStream to Claude Code on macOS. You don't need to be a developer. Each step includes what you should see to know it worked.
+This guide walks you through connecting ToolStream to Claude Code on macOS. MCP (Model Context Protocol) is the standard that lets Claude connect to external services like GitHub and Jira. ToolStream acts as a single MCP server that manages all your other services for you. You don't need to be a developer. Each step includes what you should see to know it worked.
 
 ---
 
@@ -83,7 +83,7 @@ Find the `mcpServers` section in the file. If it doesn't exist, add it. The full
 
 Replace the two paths with the actual paths you saved in Step 2.
 
-The `env` block passes credentials to ToolStream. Upstream servers that need these credentials use `env_passthrough` in the YAML config to receive them. Only include the env vars your servers need.
+The `env` block passes credentials to ToolStream. ToolStream forwards them to the services that need them automatically. Only include the credentials your services require.
 
 If you already have other MCP server entries, add `toolstream` alongside them. But read Step 5 first.
 
@@ -158,4 +158,4 @@ If Claude doesn't mention ToolStream or your servers, check the [Troubleshooting
 
 Before ToolStream, every turn of your conversation sent all tool schemas to Claude. With a modest setup of 4 MCP servers, that's often 30,000+ tokens per turn before you've said anything.
 
-Now Claude sees 3 tools instead of hundreds. As your conversation develops, ToolStream automatically routes the relevant tools into context. You'll see the same capabilities with dramatically fewer tokens used.
+Now Claude sees 4 tools instead of hundreds. As your conversation develops, ToolStream automatically routes the relevant tools into context. You'll see the same capabilities with dramatically fewer tokens used.

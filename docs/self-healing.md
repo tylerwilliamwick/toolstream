@@ -1,6 +1,8 @@
 # Self-Healing: Auto-Reconnection and Health Checks
 
-ToolStream maintains persistent connections to upstream MCP servers. When a server goes down, ToolStream detects it and reconnects automatically without any intervention from you.
+If one of your connected services goes offline, ToolStream notices within 60 seconds and starts trying to reconnect on its own. It tries up to 10 times, waiting longer between each attempt. If it cannot reconnect after 10 tries, it stops retrying and sends you a Telegram alert (if you have notifications configured). You don't need to do anything; this is all automatic.
+
+The rest of this page covers the technical details of how this works.
 
 ---
 

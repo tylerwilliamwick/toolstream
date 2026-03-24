@@ -1,6 +1,6 @@
 # First Config
 
-ToolStream uses a single YAML file for all configuration. This guide walks through each section of `toolstream.config.yaml` and explains what each field does.
+ToolStream uses a single YAML file for all configuration. MCP (Model Context Protocol) is the standard that lets AI assistants connect to external services; each service you connect is called an "MCP server." This guide walks through each section of `toolstream.config.yaml` and explains what each field does.
 
 ---
 
@@ -74,7 +74,7 @@ The embedding model to use. This model is small (22MB), fast, and performs well 
 Controls how ToolStream decides which tools to surface each turn.
 
 **`top_k: 5`**
-The maximum number of tools surfaced automatically per conversation turn. A value of 5 means Claude sees at most 5 tool schemas beyond the 3 meta-tools. Raise this if Claude frequently says it can't find the right tool. Lower it to save more tokens.
+The maximum number of tools surfaced automatically per conversation turn. A value of 5 means Claude sees at most 5 tool schemas beyond the 4 meta-tools. Raise this if Claude frequently says it can't find the right tool. Lower it to save more tokens.
 
 **`confidence_threshold: 0.3`**
 The minimum similarity score (0 to 1) a tool must reach to be surfaced. Tools below this score are skipped. Raise this to be more selective. Lower it if ToolStream is missing tools that should be surfaced.
