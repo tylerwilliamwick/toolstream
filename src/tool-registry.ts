@@ -81,18 +81,33 @@ export class ToolRegistry {
       toolIds.push(toolId);
     }
 
-    // Generate embeddings in batch (with write lock)
+    // Generate embeddings only for tools that don't have them yet
     if (descriptions.length > 0) {
-      await this.acquireWriteLock();
-      try {
-        const vectors = await this.embedEngine.embedBatch(descriptions);
-        for (let i = 0; i < toolIds.length; i++) {
-          const buffer = Buffer.from(vectors[i].buffer);
-          this.db.insertEmbedding(toolIds[i], buffer, this.modelId);
-          this.vectorIndex.set(toolIds[i], vectors[i]);
+      // Filter to only tools that need new embeddings
+      const needsEmbedding: { desc: string; id: string }[] = [];
+      for (let i = 0; i < toolIds.length; i++) {
+        const existing = this.db.getEmbedding(toolIds[i]);
+        if (!existing) {
+          needsEmbedding.push({ desc: descriptions[i], id: toolIds[i] });
+        } else {
+          // Load existing embedding into memory index
+          const vector = new Float32Array(existing.vector.buffer, existing.vector.byteOffset, existing.vector.byteLength / 4);
+          this.vectorIndex.set(toolIds[i], vector);
         }
-      } finally {
-        this.releaseWriteLock();
+      }
+
+      if (needsEmbedding.length > 0) {
+        await this.acquireWriteLock();
+        try {
+          const vectors = await this.embedEngine.embedBatch(needsEmbedding.map(t => t.desc));
+          for (let i = 0; i < needsEmbedding.length; i++) {
+            const buffer = Buffer.from(vectors[i].buffer);
+            this.db.insertEmbedding(needsEmbedding[i].id, buffer, this.modelId);
+            this.vectorIndex.set(needsEmbedding[i].id, vectors[i]);
+          }
+        } finally {
+          this.releaseWriteLock();
+        }
       }
     }
 
