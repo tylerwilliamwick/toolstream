@@ -1,6 +1,6 @@
 # How It Works
 
-ToolStream sits between your LLM client and your MCP servers. It proxies all tool calls, but the key thing it does is control which tool schemas the LLM sees at any given moment.
+ToolStream sits between your LLM client and your MCP (Model Context Protocol) servers. MCP is the standard that lets AI assistants connect to external services like GitHub, Jira, and file systems. It proxies all tool calls, but the key thing it does is control which tool schemas the LLM sees at any given moment.
 
 ---
 
@@ -8,7 +8,7 @@ ToolStream sits between your LLM client and your MCP servers. It proxies all too
 
 Every time an LLM client sends a message, it includes the full schema for every available tool. With 10 tools, that's manageable. With 100+ tools spread across Jira, GitHub, filesystem, Slack, and other servers, you're sending 30,000 to 100,000 tokens of tool definitions before you've typed a word.
 
-ToolStream replaces that constant overhead with a small fixed cost: 3 meta-tool schemas, always.
+ToolStream replaces that constant overhead with a small fixed cost: 4 meta-tool schemas, always.
 
 ---
 
@@ -29,13 +29,14 @@ The LLM client doesn't know about the individual servers. It only sees ToolStrea
 
 ### Step 2: Meta-tools
 
-When the LLM client asks "what tools do you have?", ToolStream returns exactly 3:
+When the LLM client asks "what tools do you have?", ToolStream returns exactly 4:
 
 - `discover_servers`: list all upstream servers
 - `discover_tools`: search for tools by natural language
 - `execute_tool`: call any tool by name, even without discovering it first
+- `reconnect_server`: force-reconnect a server that has gone offline
 
-These 3 schemas are tiny. A typical turn now costs ~800 tokens in tool definitions instead of 30,000+.
+These 4 schemas are tiny. A typical turn now costs ~800 tokens in tool definitions instead of 30,000+.
 
 ### Step 3: Semantic routing
 

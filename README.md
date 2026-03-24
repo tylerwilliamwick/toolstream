@@ -1,32 +1,34 @@
 # ToolStream
 
-A standalone MCP proxy that makes tool loading intelligent. Sessions start with zero tool schemas. As the conversation progresses, ToolStream predicts which tools are relevant using semantic embeddings and surfaces only those tools to the LLM.
+Every time Claude Code starts a conversation, it loads the full list of tools from every connected service. If you have GitHub, Jira, Confluence, and a few other services connected, that can mean 100+ tool definitions sent to the model on every single turn, costing tens of thousands of tokens before you've typed a word.
 
-**Result:** 90%+ reduction in tool-related token consumption with no loss of capability.
+ToolStream fixes this. It sits between Claude Code and your services, and instead of loading everything upfront, it figures out which tools are relevant based on what you're talking about. If you're discussing a Jira ticket, the Jira tools appear. If you're working with files, the file tools appear. Everything else stays out of the way.
+
+**Result:** 90%+ fewer tokens spent on tool definitions, with no loss of capability.
 
 ## How It Works
 
-1. LLM client connects to ToolStream as a single MCP server
-2. ToolStream returns 3 meta-tools: `discover_servers`, `discover_tools`, `execute_tool`
-3. As conversation context arrives, semantic routing surfaces relevant tools automatically
-4. The LLM can always fall back to `discover_tools` for explicit search
+1. Claude Code connects to ToolStream instead of connecting to each service separately
+2. ToolStream starts with just 4 small tools: discover_servers, discover_tools, execute_tool, and reconnect_server
+3. As the conversation develops, ToolStream automatically brings in the tools that match what you're doing
+4. If a tool doesn't appear on its own, Claude can search for it directly
 
 ```mermaid
 flowchart TD
-    Client["Claude Code\n(LLM client)"]
-    TS["Toolstream Proxy\n─────────────────\nSemantic Router\nSession Manager\nTool Registry\nHealth Monitor"]
-    GH["GitHub MCP Server\n(26 tools)"]
-    AT["Atlassian MCP Server\n(Jira + Confluence, 72 tools)"]
-    OB["Obsidian MCP Server\n(14 tools)"]
-    OT["Other MCP Servers..."]
-    TG["Telegram Bot API"]
+    Client["Claude Code"]
+    TS["ToolStream\n─────────────────\nRoutes the right tools\nto the right conversation"]
+    GH["GitHub\n(26 tools)"]
+    AT["Atlassian\n(Jira + Confluence, 72 tools)"]
+    OB["Obsidian\n(14 tools)"]
+    OT["Other services..."]
+    TG["Telegram\n(alerts)"]
 
-    Client -- "stdio (3 meta-tools)" --> TS
-    TS -- "stdio" --> GH
-    TS -- "stdio + env_passthrough" --> AT
-    TS -- "stdio" --> OB
-    TS -- "stdio" --> OT
-    TS -- "HTTPS (alerts)" --> TG
+    Client -- "4 tools visible to Claude" --> TS
+    TS -- "connects to" --> GH
+    TS -- "connects to (with credentials)" --> AT
+    TS -- "connects to" --> OB
+    TS -- "connects to" --> OT
+    TS -- "sends alerts to" --> TG
 ```
 
 ## Quick Start
@@ -122,13 +124,14 @@ Credentials go in the `env` block of the toolstream server entry. ToolStream for
 
 ## Meta-Tools
 
-These 3 tools are always visible to the LLM:
+These 4 tools are always visible to the LLM:
 
 | Tool | Purpose |
 |------|---------|
 | `discover_servers` | List all upstream MCP servers with IDs and tool counts |
 | `discover_tools` | Search for tools by natural language query |
 | `execute_tool` | Call any tool on any server directly by name |
+| `reconnect_server` | Force-reconnect a server that has gone offline |
 
 ## Architecture
 
