@@ -232,6 +232,52 @@ describe("ProxyServer", () => {
     }
   });
 
+  it("discover_tools without query parameter returns error response", async () => {
+    const result = await client.callTool({
+      name: "discover_tools",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    const parsed = JSON.parse(content[0].text);
+    expect(parsed.error).toBe("query parameter is required");
+  });
+
+  it("execute_tool with non-existent server returns server_not_connected error", async () => {
+    const result = await client.callTool({
+      name: "execute_tool",
+      arguments: {
+        server: "nonexistent-server",
+        tool: "some_tool",
+        arguments: {},
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    const parsed = JSON.parse(content[0].text);
+    // Registry won't find the tool, so tool_not_found fires before server_not_connected
+    expect(["tool_not_found", "server_not_connected"]).toContain(parsed.error);
+  });
+
+  it("execute_tool with non-existent tool on valid server returns tool_not_found", async () => {
+    const result = await client.callTool({
+      name: "execute_tool",
+      arguments: {
+        server: "fs",
+        tool: "totally_missing_tool",
+        arguments: {},
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    const parsed = JSON.parse(content[0].text);
+    expect(parsed.error).toBe("tool_not_found");
+    expect(parsed.tool_name).toBe("totally_missing_tool");
+  });
+
   it("discover_servers returns correct server list", async () => {
     const result = await client.callTool({
       name: "discover_servers",

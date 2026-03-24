@@ -16,7 +16,15 @@ export class ConfigValidationError extends Error {
 
 export function loadConfig(configPath: string): ToolStreamConfig {
   const raw = readFileSync(configPath, "utf-8");
-  const doc = yaml.load(raw) as any;
+  let doc: any;
+  try {
+    doc = yaml.load(raw) as any;
+  } catch (err) {
+    throw new ConfigValidationError(
+      "root",
+      `Invalid YAML syntax: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 
   if (!doc || typeof doc !== "object") {
     throw new ConfigValidationError("root", "Config file is empty or not an object");
@@ -72,6 +80,9 @@ export function loadConfig(configPath: string): ToolStreamConfig {
   const servers = doc.servers;
   if (!Array.isArray(servers)) {
     throw new ConfigValidationError("servers", "Missing required array 'servers'");
+  }
+  if (servers.length === 0) {
+    console.warn("[Config] Warning: No servers configured. Toolstream will start with meta-tools only.");
   }
 
   const parsedServers: ServerConfig[] = servers.map(

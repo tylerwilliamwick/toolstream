@@ -120,6 +120,10 @@ npm run build
 | 107 tools | ~32K tokens/turn | ~2.8K tokens/turn | 91% |
 | 200 tools | ~100K tokens/turn | ~2.8K tokens/turn | 97% |
 
+## Known Limitations
+
+- **Single client per instance**: Toolstream uses a single session ID for stdio transport, designed for one-to-one client connections (e.g., one Claude Code instance). Running multiple clients against the same Toolstream instance will share session state.
+
 ## License
 
 MIT

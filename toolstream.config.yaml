@@ -19,7 +19,7 @@ toolstream:
 
   storage:
     provider: "sqlite"
-    sqlite_path: "/Users/REDACTED/Projects/toolstream/toolstream.db"
+    sqlite_path: "/Users/REDACTED/projects/toolstream/toolstream.db"
 
 servers:
   - id: "github"

@@ -125,8 +125,15 @@ export class SessionManager {
     // Add surfaced tools with namespaced names
     if (session) {
       for (const [, tool] of session.activeSurface) {
+        const namespacedName = `${tool.serverId}_${tool.toolName}`;
+        // Check for collision with already-added tools
+        const existing = tools.find(t => t.name === namespacedName);
+        if (existing) {
+          console.warn(`[SessionManager] Tool name collision: '${namespacedName}' from server '${tool.serverId}' conflicts with existing tool`);
+          continue; // skip duplicate
+        }
         tools.push({
-          name: `${tool.serverId}_${tool.toolName}`,
+          name: namespacedName,
           description: tool.description,
           inputSchema: tool.inputSchema,
         });

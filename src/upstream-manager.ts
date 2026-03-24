@@ -15,6 +15,7 @@ interface UpstreamConnection {
 export class UpstreamManager {
   private connections: Map<string, UpstreamConnection> = new Map();
   private registry: ToolRegistry;
+  private failureCounts: Map<string, { count: number; firstAt: number }> = new Map();
 
   constructor(registry: ToolRegistry) {
     this.registry = registry;
@@ -136,13 +137,31 @@ export class UpstreamManager {
       throw new Error(`Server '${serverId}' is in degraded state`);
     }
 
+    const timeoutMs = 30_000;
     try {
-      const result = await conn.client.callTool({
-        name: toolName,
-        arguments: args,
-      });
+      const result = await Promise.race([
+        conn.client.callTool({ name: toolName, arguments: args }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Tool call '${toolName}' timed out after ${timeoutMs}ms`)), timeoutMs)
+        ),
+      ]);
+      // Reset failure count on success
+      this.failureCounts.delete(serverId);
       return result;
     } catch (err) {
+      // Track failures for circuit-breaker logic
+      const now = Date.now();
+      const existing = this.failureCounts.get(serverId);
+      if (existing && now - existing.firstAt < 300_000) {
+        existing.count += 1;
+        if (existing.count > 3) {
+          conn.healthy = false;
+          console.warn(`[UpstreamManager] Server '${serverId}' marked unhealthy after ${existing.count} failures within 5 minutes`);
+        }
+      } else {
+        this.failureCounts.set(serverId, { count: 1, firstAt: now });
+      }
+
       // Check if it's an auth error
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("401") || message.includes("Unauthorized")) {

@@ -14,11 +14,19 @@ export class EmbeddingEngine {
     if (this.provider === "local") {
       // Dynamic import to avoid issues when module is not available
       const { pipeline } = await import("@xenova/transformers");
-      this.extractor = await pipeline(
-        "feature-extraction",
-        "Xenova/all-MiniLM-L6-v2",
-        { revision: "main" }
-      );
+      try {
+        this.extractor = await pipeline(
+          "feature-extraction",
+          "Xenova/all-MiniLM-L6-v2",
+          { revision: "main" }
+        );
+      } catch (err) {
+        throw new Error(
+          `Failed to initialize embedding model 'all-MiniLM-L6-v2'. ` +
+          `If this is your first run, ensure you have an internet connection for the initial model download (~90MB). ` +
+          `Original error: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
   }
 
