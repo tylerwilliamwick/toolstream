@@ -1,0 +1,31 @@
+# toolstream.config.yaml
+
+toolstream:
+  transport:
+    stdio: true
+    http:
+      enabled: false
+      port: 3000
+      host: "127.0.0.1"
+
+  embedding:
+    provider: "local"
+    model: "all-MiniLM-L6-v2"
+
+  routing:
+    top_k: 5
+    confidence_threshold: 0.3
+    context_window_turns: 3
+
+  storage:
+    provider: "sqlite"
+    sqlite_path: "./toolstream.db"
+
+servers:
+  - id: "filesystem"
+    name: "Filesystem Server"
+    transport: "stdio"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    auth:
+      type: "none"

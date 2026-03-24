@@ -1,0 +1,349 @@
+// src/proxy-server.ts - Main MCP proxy server
+
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import type { ToolStreamConfig } from "./types.js";
+import type { SessionManager } from "./session-manager.js";
+import type { SemanticRouter } from "./semantic-router.js";
+import type { ToolRegistry } from "./tool-registry.js";
+import type { UpstreamManager } from "./upstream-manager.js";
+import type { DependencyResolver } from "./dependency-resolver.js";
+import { isMetaTool } from "./meta-tools.js";
+
+export class ProxyServer {
+  private server: Server;
+  private sessionManager: SessionManager;
+  private semanticRouter: SemanticRouter;
+  private registry: ToolRegistry;
+  private upstreamManager: UpstreamManager;
+  private dependencyResolver: DependencyResolver;
+  private config: ToolStreamConfig;
+  private currentSessionId: string | null = null;
+
+  constructor(
+    config: ToolStreamConfig,
+    sessionManager: SessionManager,
+    semanticRouter: SemanticRouter,
+    registry: ToolRegistry,
+    upstreamManager: UpstreamManager,
+    dependencyResolver: DependencyResolver
+  ) {
+    this.config = config;
+    this.sessionManager = sessionManager;
+    this.semanticRouter = semanticRouter;
+    this.registry = registry;
+    this.upstreamManager = upstreamManager;
+    this.dependencyResolver = dependencyResolver;
+
+    this.server = new Server(
+      {
+        name: "toolstream",
+        version: "1.0.0",
+      },
+      {
+        capabilities: {
+          tools: { listChanged: true },
+        },
+      }
+    );
+
+    this.setupHandlers();
+  }
+
+  private setupHandlers(): void {
+    // Handle tools/list
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      if (!this.currentSessionId) {
+        const session = this.sessionManager.createSession();
+        this.currentSessionId = session.id;
+      }
+
+      const tools = this.sessionManager.getVisibleTools(this.currentSessionId);
+      return {
+        tools: tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+        })),
+      };
+    });
+
+    // Handle tools/call
+    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      const { name, arguments: args } = request.params;
+
+      if (!this.currentSessionId) {
+        const session = this.sessionManager.createSession();
+        this.currentSessionId = session.id;
+      }
+
+      // Update context with the tool call for future routing
+      this.sessionManager.updateContext(
+        this.currentSessionId,
+        `Tool call: ${name} ${JSON.stringify(args)}`
+      );
+
+      // Handle meta-tools
+      if (isMetaTool(name)) {
+        return this.handleMetaTool(name, args || {});
+      }
+
+      // Handle surfaced tool calls
+      const resolved = this.sessionManager.resolveToolCall(
+        this.currentSessionId,
+        name
+      );
+      if (resolved) {
+        try {
+          const result = await this.upstreamManager.callTool(
+            resolved.serverId,
+            resolved.originalName,
+            (args || {}) as Record<string, unknown>
+          );
+          return result;
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error calling ${name}: ${err instanceof Error ? err.message : String(err)}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Unknown tool: ${name}. Use discover_tools to find available tools.`,
+          },
+        ],
+        isError: true,
+      };
+    });
+  }
+
+  private async handleMetaTool(
+    name: string,
+    args: Record<string, unknown>
+  ): Promise<any> {
+    switch (name) {
+      case "discover_servers": {
+        const servers = this.registry.getAllServers();
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                servers.map((s) => ({
+                  id: s.id,
+                  name: s.displayName,
+                  tool_count: s.toolCount,
+                })),
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "discover_tools": {
+        const query = args.query as string;
+        const topK = (args.top_k as number) || 10;
+
+        if (!query) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ error: "query parameter is required" }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const results = await this.semanticRouter.search(query, topK);
+
+        // Surface discovered tools into the session
+        if (this.currentSessionId && results.length > 0) {
+          const toolsToSurface = results.map((r) => ({
+            ...r,
+            source: "meta_tool" as const,
+          }));
+          this.sessionManager.surfaceTools(
+            this.currentSessionId,
+            toolsToSurface
+          );
+
+          // Resolve dependencies for surfaced tools
+          for (const result of results) {
+            const deps = this.dependencyResolver.resolveDependencies(
+              result.tool
+            );
+            if (deps.length > 0) {
+              this.sessionManager.surfaceToolsDirect(
+                this.currentSessionId,
+                deps,
+                "dependency"
+              );
+            }
+          }
+
+          // Notify client that tool list changed
+          await this.notifyToolsChanged();
+        }
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                results.map((r) => ({
+                  server: r.tool.serverId,
+                  tool: r.tool.toolName,
+                  description: r.tool.description,
+                  relevance_score: Math.round(r.score * 1000) / 1000,
+                  input_schema: r.tool.inputSchema,
+                })),
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "execute_tool": {
+        const server = args.server as string;
+        const tool = args.tool as string;
+        const toolArgs = (args.arguments || {}) as Record<string, unknown>;
+
+        if (!server || !tool) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "server and tool parameters are required",
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Check if the tool exists
+        const toolRecord = this.registry.getToolByServerAndName(server, tool);
+        if (!toolRecord) {
+          const closest = this.registry.findClosestTool(tool);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "tool_not_found",
+                  tool_name: tool,
+                  suggestion: closest || undefined,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        if (!this.upstreamManager.isConnected(server)) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "server_not_connected",
+                  server_id: server,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        try {
+          const result = await this.upstreamManager.callTool(
+            server,
+            tool,
+            toolArgs
+          );
+          return result;
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      default:
+        return {
+          content: [
+            { type: "text" as const, text: `Unknown meta-tool: ${name}` },
+          ],
+          isError: true,
+        };
+    }
+  }
+
+  private async notifyToolsChanged(): Promise<void> {
+    try {
+      await this.server.notification({
+        method: "notifications/tools/list_changed",
+      });
+    } catch {
+      // Notification failures are non-fatal
+    }
+  }
+
+  async routeContext(contextText: string): Promise<void> {
+    if (!this.currentSessionId) return;
+
+    this.sessionManager.updateContext(this.currentSessionId, contextText);
+
+    const result = await this.semanticRouter.route(
+      this.sessionManager.getSession(this.currentSessionId)?.contextBuffer || []
+    );
+
+    if (!result.belowThreshold && result.candidates.length > 0) {
+      this.sessionManager.surfaceTools(
+        this.currentSessionId,
+        result.candidates
+      );
+      await this.notifyToolsChanged();
+    }
+  }
+
+  async start(): Promise<void> {
+    if (this.config.transport.stdio) {
+      const transport = new StdioServerTransport();
+      await this.server.connect(transport);
+      console.error("[ToolStream] Proxy started on stdio transport");
+    }
+  }
+
+  async stop(): Promise<void> {
+    this.sessionManager.stopCleanup();
+    await this.upstreamManager.disconnectAll();
+    await this.server.close();
+  }
+}
