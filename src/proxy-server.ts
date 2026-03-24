@@ -317,20 +317,24 @@ export class ProxyServer {
   }
 
   async routeContext(contextText: string): Promise<void> {
-    if (!this.currentSessionId) return;
+    try {
+      if (!this.currentSessionId) return;
 
-    this.sessionManager.updateContext(this.currentSessionId, contextText);
+      this.sessionManager.updateContext(this.currentSessionId, contextText);
 
-    const result = await this.semanticRouter.route(
-      this.sessionManager.getSession(this.currentSessionId)?.contextBuffer || []
-    );
-
-    if (!result.belowThreshold && result.candidates.length > 0) {
-      this.sessionManager.surfaceTools(
-        this.currentSessionId,
-        result.candidates
+      const result = await this.semanticRouter.route(
+        this.sessionManager.getSession(this.currentSessionId)?.contextBuffer || []
       );
-      await this.notifyToolsChanged();
+
+      if (!result.belowThreshold && result.candidates.length > 0) {
+        this.sessionManager.surfaceTools(
+          this.currentSessionId,
+          result.candidates
+        );
+        await this.notifyToolsChanged();
+      }
+    } catch (err) {
+      console.error(`[ProxyServer] Error in routeContext:`, err instanceof Error ? err.message : String(err));
     }
   }
 

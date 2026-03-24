@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { loadConfig, ConfigValidationError } from "../src/config-loader.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -145,5 +145,25 @@ servers: []
     const bad = VALID_CONFIG.replace('provider: "local"', 'provider: "magic"');
     writeFileSync(configPath, bad);
     expect(() => loadConfig(configPath)).toThrow("provider");
+  });
+
+  it("warns but does not throw for empty servers array", () => {
+    const emptyServers = VALID_CONFIG.replace(
+      /servers:\n.*- id.*\n.*name.*\n.*transport.*\n.*command.*\n.*args.*\n.*auth.*\n.*type.*\n/s,
+      "servers: []\n"
+    );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    writeFileSync(configPath, emptyServers);
+    expect(() => loadConfig(configPath)).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("No servers configured")
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("throws ConfigValidationError with user-friendly message for malformed YAML", () => {
+    writeFileSync(configPath, "toolstream:\n  transport: [\n  bad yaml here");
+    expect(() => loadConfig(configPath)).toThrow(ConfigValidationError);
+    expect(() => loadConfig(configPath)).toThrow("Invalid YAML syntax");
   });
 });

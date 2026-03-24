@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { EmbeddingEngine } from "../src/embedding-engine.js";
 
 describe("EmbeddingEngine", () => {
@@ -77,5 +77,25 @@ describe("EmbeddingEngine", () => {
 
   it("vectorDimensions returns 384", () => {
     expect(engine.vectorDimensions).toBe(384);
+  });
+});
+
+describe("EmbeddingEngine initialization failure", () => {
+  it("wraps pipeline errors with user-friendly message", async () => {
+    const mockPipeline = vi.fn().mockRejectedValue(new Error("network timeout"));
+    vi.doMock("@xenova/transformers", () => ({ pipeline: mockPipeline }));
+
+    // Use dynamic import to get a fresh module with the mock applied
+    const { EmbeddingEngine: MockedEngine } = await import("../src/embedding-engine.js");
+    const engine = new MockedEngine("local");
+
+    await expect(engine.initialize()).rejects.toThrow(
+      "Failed to initialize embedding model 'all-MiniLM-L6-v2'"
+    );
+    await expect(engine.initialize()).rejects.toThrow(
+      "internet connection"
+    );
+
+    vi.doUnmock("@xenova/transformers");
   });
 });
