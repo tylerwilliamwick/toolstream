@@ -155,14 +155,15 @@ describe("ProxyServer", () => {
     db.close();
   });
 
-  it("tools/list on fresh session returns exactly 3 meta-tools", async () => {
+  it("tools/list on fresh session returns exactly 4 meta-tools", async () => {
     const result = await client.listTools();
     const names = result.tools.map((t) => t.name);
 
     expect(names).toContain("discover_servers");
     expect(names).toContain("discover_tools");
     expect(names).toContain("execute_tool");
-    expect(result.tools).toHaveLength(3);
+    expect(names).toContain("reconnect_server");
+    expect(result.tools).toHaveLength(4);
   });
 
   it("discover_tools returns file-related tools for 'read a file'", async () => {
