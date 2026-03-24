@@ -39,7 +39,7 @@
     "semantic-routing",
     "model-context-protocol"
   ],
-  "author": "",
+  "author": "Tyler Wick",
   "license": "MIT",
   "dependencies": {
     "@inquirer/prompts": "^7.0.0",
