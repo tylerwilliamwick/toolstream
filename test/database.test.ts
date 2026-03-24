@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ToolStreamDatabase } from "../src/database.js";
+import Database from "better-sqlite3";
 import { existsSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -49,10 +50,52 @@ describe("ToolStreamDatabase", () => {
 
     it("records migration version", () => {
       const rows = db.raw
-        .prepare("SELECT version FROM schema_migrations")
+        .prepare("SELECT version FROM schema_migrations ORDER BY version")
         .all() as any[];
-      expect(rows.length).toBeGreaterThanOrEqual(1);
+      expect(rows.length).toBeGreaterThanOrEqual(2);
       expect(rows[0].version).toBe(1);
+      expect(rows[1].version).toBe(2);
+    });
+
+    it("applies v2 migration to a v1-only database", () => {
+      db.close();
+
+      // Build a v1-only database by hand
+      const v1Path = tmpDbPath();
+      const rawDb = new Database(v1Path);
+      rawDb.pragma("journal_mode = WAL");
+      rawDb.exec(`
+        CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL);
+        CREATE TABLE servers (
+          id TEXT PRIMARY KEY,
+          display_name TEXT NOT NULL,
+          transport_type TEXT NOT NULL,
+          last_synced_at INTEGER,
+          tool_count INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+      rawDb.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (1, ?)").run(Date.now());
+      rawDb.close();
+
+      // Opening through ToolStreamDatabase should apply v2
+      const upgraded = new ToolStreamDatabase(v1Path);
+
+      const cols = upgraded.raw
+        .prepare("PRAGMA table_info(servers)")
+        .all() as Array<{ name: string }>;
+      const colNames = cols.map((c) => c.name);
+
+      expect(colNames).toContain("last_ping_ms");
+      expect(colNames).toContain("last_ping_at");
+
+      upgraded.close();
+      for (const suffix of ["", "-wal", "-shm"]) {
+        const p = v1Path + suffix;
+        if (existsSync(p)) unlinkSync(p);
+      }
+
+      // Re-open original db for afterEach cleanup
+      db = new ToolStreamDatabase(dbPath);
     });
 
     it("enables WAL mode", () => {
@@ -79,6 +122,28 @@ describe("ToolStreamDatabase", () => {
       const servers = db.getAllServers();
       expect(servers[0].tool_count).toBe(42);
       expect(servers[0].last_synced_at).toBeGreaterThan(0);
+    });
+
+    it("updateServerPing and getServerPing round-trip", () => {
+      db.insertServer("github", "GitHub", "stdio");
+
+      const before = db.getServerPing("github");
+      expect(before).toBeDefined();
+      expect(before!.last_ping_ms).toBeNull();
+      expect(before!.last_ping_at).toBeNull();
+
+      db.updateServerPing("github", 123);
+
+      const after = db.getServerPing("github");
+      expect(after).toBeDefined();
+      expect(after!.last_ping_ms).toBe(123);
+      expect(typeof after!.last_ping_at).toBe("string");
+      expect(after!.last_ping_at!.length).toBeGreaterThan(0);
+    });
+
+    it("getServerPing returns undefined for missing server", () => {
+      const result = db.getServerPing("nonexistent");
+      expect(result).toBeUndefined();
     });
   });
 

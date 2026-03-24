@@ -5,10 +5,10 @@ import { existsSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
-const MIGRATIONS: Record<number, string> = {
-  1: `
+const MIGRATIONS: Record<number, string[]> = {
+  1: [`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY,
       applied_at INTEGER NOT NULL
@@ -60,7 +60,11 @@ const MIGRATIONS: Record<number, string> = {
 
     CREATE INDEX IF NOT EXISTS idx_tools_server_id ON tools(server_id);
     CREATE INDEX IF NOT EXISTS idx_tool_cache_session ON tool_cache(session_id);
-  `,
+  `],
+  2: [
+    `ALTER TABLE servers ADD COLUMN last_ping_ms INTEGER`,
+    `ALTER TABLE servers ADD COLUMN last_ping_at TEXT`,
+  ],
 };
 
 export class ToolStreamDatabase {
@@ -107,10 +111,12 @@ export class ToolStreamDatabase {
         .map((row: any) => row.version as number)
     );
 
-    for (const [versionStr, sql] of Object.entries(MIGRATIONS)) {
+    for (const [versionStr, statements] of Object.entries(MIGRATIONS)) {
       const version = Number(versionStr);
       if (!applied.has(version)) {
-        this.db.exec(sql);
+        for (const sql of statements) {
+          this.db.exec(sql);
+        }
         this.db
           .prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
           .run(version, Date.now());
@@ -150,6 +156,22 @@ export class ToolStreamDatabase {
         "UPDATE servers SET last_synced_at = ?, tool_count = ? WHERE id = ?"
       )
       .run(Date.now(), toolCount, id);
+  }
+
+  updateServerPing(serverId: string, pingMs: number): void {
+    this.db
+      .prepare(
+        "UPDATE servers SET last_ping_ms = ?, last_ping_at = datetime('now') WHERE id = ?"
+      )
+      .run(pingMs, serverId);
+  }
+
+  getServerPing(
+    serverId: string
+  ): { last_ping_ms: number | null; last_ping_at: string | null } | undefined {
+    return this.db
+      .prepare("SELECT last_ping_ms, last_ping_at FROM servers WHERE id = ?")
+      .get(serverId) as any;
   }
 
   // --- Tool operations ---
