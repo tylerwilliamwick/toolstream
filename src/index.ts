@@ -1,100 +1,80 @@
 #!/usr/bin/env node
-// src/index.ts - ToolStream CLI entry point
+// src/index.ts - ToolStream CLI router
 
-import { resolve } from "node:path";
-import { existsSync } from "node:fs";
-import { loadConfig } from "./config-loader.js";
-import { ToolStreamDatabase } from "./database.js";
-import { EmbeddingEngine } from "./embedding-engine.js";
-import { ToolRegistry } from "./tool-registry.js";
-import { SemanticRouter } from "./semantic-router.js";
-import { SessionManager } from "./session-manager.js";
-import { UpstreamManager } from "./upstream-manager.js";
-import { DependencyResolver } from "./dependency-resolver.js";
-import { ProxyServer } from "./proxy-server.js";
+import { parseArgs } from "node:util";
+
+const HELP = `
+ToolStream - Lazy tool loading MCP proxy
+
+Usage:
+  toolstream start [config] [--ui]   Start the proxy (default: toolstream.config.yaml)
+  toolstream init                    Create a new config file interactively
+  toolstream add-server              Add a server to an existing config
+  toolstream health                  Check server health from the database
+  toolstream --help                  Show this help
+
+Options:
+  --ui        Start the web dashboard alongside the proxy
+  --help, -h  Show help
+`.trim();
 
 async function main(): Promise<void> {
-  const configPath = resolve(
-    process.argv[2] || "toolstream.config.yaml"
-  );
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    options: {
+      ui: { type: "boolean", default: false },
+      help: { type: "boolean", short: "h", default: false },
+    },
+    strict: false,
+  });
 
-  if (!existsSync(configPath)) {
-    console.error(`[ToolStream] Config file not found: ${configPath}`);
-    console.error(
-      "Usage: toolstream [config-path]  (default: toolstream.config.yaml)"
-    );
-    process.exit(1);
-  }
-
-  console.error(`[ToolStream] Loading config from ${configPath}`);
-  const config = loadConfig(configPath);
-
-  // Initialize database
-  const dbPath = resolve(config.storage.sqlitePath || "./toolstream.db");
-  console.error(`[ToolStream] Opening database at ${dbPath}`);
-  const db = new ToolStreamDatabase(dbPath);
-
-  // Initialize embedding engine
-  console.error("[ToolStream] Initializing embedding engine...");
-  const embedEngine = new EmbeddingEngine(config.embedding.provider);
-  await embedEngine.initialize();
-  console.error("[ToolStream] Embedding engine ready");
-
-  // Initialize components
-  const registry = new ToolRegistry(db, embedEngine, config.embedding.model);
-  await registry.loadIndex();
-
-  const router = new SemanticRouter(embedEngine, registry, config.routing);
-  const sessionManager = new SessionManager(db);
-  sessionManager.startCleanup();
-
-  const upstreamManager = new UpstreamManager(registry);
-  const dependencyResolver = new DependencyResolver();
-
-  // Connect to upstream servers
-  console.error(
-    `[ToolStream] Connecting to ${config.servers.length} upstream servers...`
-  );
-  await upstreamManager.connectAll(config.servers);
-
-  // Register tools for dependency resolution
-  for (const server of config.servers) {
-    const tools = registry.getAllActiveTools().filter(
-      (t) => t.serverId === server.id
-    );
-    if (tools.length > 0) {
-      dependencyResolver.registerTools(server.id, tools);
+  if (values.help || positionals.length === 0) {
+    // Default to 'start' if no subcommand given and not --help
+    if (!values.help && positionals.length === 0) {
+      // Legacy behavior: no args = start with default config
+      const { startCommand } = await import("./cli/start.js");
+      await startCommand("toolstream.config.yaml", {
+        ui: values.ui as boolean,
+      });
+      return;
     }
+    console.log(HELP);
+    return;
   }
 
-  const status = upstreamManager.getServerStatus();
-  const healthy = status.filter((s) => s.healthy).length;
-  console.error(
-    `[ToolStream] ${healthy}/${status.length} servers connected, ${registry.indexSize} tools indexed`
-  );
+  const subcommand = positionals[0];
 
-  // Start proxy server
-  const proxy = new ProxyServer(
-    config,
-    sessionManager,
-    router,
-    registry,
-    upstreamManager,
-    dependencyResolver
-  );
+  switch (subcommand) {
+    case "start": {
+      const configPath = positionals[1] || "toolstream.config.yaml";
+      const { startCommand } = await import("./cli/start.js");
+      await startCommand(configPath, { ui: values.ui as boolean });
+      break;
+    }
 
-  // Graceful shutdown
-  const shutdown = async () => {
-    console.error("\n[ToolStream] Shutting down...");
-    await proxy.stop();
-    db.close();
-    process.exit(0);
-  };
+    case "init": {
+      const { initCommand } = await import("./cli/init.js");
+      await initCommand();
+      break;
+    }
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+    case "add-server": {
+      const { addServerCommand } = await import("./cli/add-server.js");
+      await addServerCommand();
+      break;
+    }
 
-  await proxy.start();
+    case "health": {
+      const { healthCommand } = await import("./cli/health.js");
+      await healthCommand();
+      break;
+    }
+
+    default:
+      console.error(`Unknown command: ${subcommand}`);
+      console.log(HELP);
+      process.exit(1);
+  }
 }
 
 main().catch((err) => {

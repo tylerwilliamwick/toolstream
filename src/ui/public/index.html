@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ToolStream Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body>
+  <div x-data="dashboard()" x-init="init()">
+    <header>
+      <h1>ToolStream</h1>
+      <p class="subtitle">Lazy Tool Loading MCP Proxy</p>
+    </header>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" x-text="health.servers || 0"></div>
+        <div class="stat-label">Servers</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" x-text="health.tools_indexed || 0"></div>
+        <div class="stat-label">Tools Indexed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" x-text="health.servers_healthy || 0"></div>
+        <div class="stat-label">Healthy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" x-text="formatUptime(health.uptime_seconds)"></div>
+        <div class="stat-label">Uptime</div>
+      </div>
+    </div>
+
+    <div class="panels">
+      <!-- Server Health -->
+      <section class="panel">
+        <h2>Server Health</h2>
+        <div class="server-list">
+          <template x-for="server in servers" :key="server.id">
+            <div class="server-row">
+              <span class="status-dot" :class="server.healthy ? 'healthy' : 'unhealthy'"></span>
+              <span class="server-name" x-text="server.name"></span>
+              <span class="server-id" x-text="server.id"></span>
+              <span class="server-tools" x-text="server.tool_count + ' tools'"></span>
+              <span class="server-transport" x-text="server.transport"></span>
+            </div>
+          </template>
+          <div x-show="servers.length === 0" class="empty">No servers connected</div>
+        </div>
+      </section>
+
+      <!-- Routing Config -->
+      <section class="panel">
+        <h2>Routing Configuration</h2>
+        <div class="config-grid" x-show="config.routing">
+          <div class="config-item">
+            <span class="config-label">Top K</span>
+            <span class="config-value" x-text="config.routing?.top_k"></span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Confidence Threshold</span>
+            <span class="config-value" x-text="config.routing?.confidence_threshold"></span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Context Window</span>
+            <span class="config-value" x-text="config.routing?.context_window_turns + ' turns'"></span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Embedding Model</span>
+            <span class="config-value" x-text="config.embedding?.model"></span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Embedding Provider</span>
+            <span class="config-value" x-text="config.embedding?.provider"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tool Catalog -->
+      <section class="panel">
+        <h2>Tool Catalog</h2>
+        <div class="search-bar">
+          <input type="text" placeholder="Search tools..." x-model="toolSearch"
+            @input.debounce.300ms="loadTools()">
+        </div>
+        <div class="tool-list">
+          <template x-for="tool in tools" :key="tool.id">
+            <div class="tool-row">
+              <span class="tool-server" x-text="tool.server"></span>
+              <span class="tool-name" x-text="tool.name"></span>
+              <span class="tool-desc" x-text="tool.description"></span>
+            </div>
+          </template>
+          <div x-show="tools.length === 0" class="empty">No tools found</div>
+        </div>
+        <div class="pagination" x-show="toolPages > 1">
+          <button @click="toolPage > 1 && (toolPage--, loadTools())"
+            :disabled="toolPage <= 1">Prev</button>
+          <span x-text="'Page ' + toolPage + ' of ' + toolPages"></span>
+          <button @click="toolPage < toolPages && (toolPage++, loadTools())"
+            :disabled="toolPage >= toolPages">Next</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    function dashboard() {
+      return {
+        health: {},
+        servers: [],
+        config: {},
+        tools: [],
+        toolSearch: '',
+        toolPage: 1,
+        toolPages: 1,
+        eventSource: null,
+
+        async init() {
+          await Promise.all([
+            this.loadHealth(),
+            this.loadServers(),
+            this.loadConfig(),
+            this.loadTools(),
+          ]);
+          this.startSSE();
+        },
+
+        async loadHealth() {
+          try {
+            const res = await fetch('/api/health');
+            this.health = await res.json();
+          } catch (e) { console.error('Health fetch failed:', e); }
+        },
+
+        async loadServers() {
+          try {
+            const res = await fetch('/api/servers');
+            this.servers = await res.json();
+          } catch (e) { console.error('Servers fetch failed:', e); }
+        },
+
+        async loadConfig() {
+          try {
+            const res = await fetch('/api/config');
+            this.config = await res.json();
+          } catch (e) { console.error('Config fetch failed:', e); }
+        },
+
+        async loadTools() {
+          try {
+            const q = this.toolSearch ? `&q=${encodeURIComponent(this.toolSearch)}` : '';
+            const res = await fetch(`/api/tools?page=${this.toolPage}&limit=20${q}`);
+            const data = await res.json();
+            this.tools = data.tools;
+            this.toolPages = data.pages;
+          } catch (e) { console.error('Tools fetch failed:', e); }
+        },
+
+        startSSE() {
+          this.eventSource = new EventSource('/api/events');
+          this.eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'health') {
+              this.servers = this.servers.map(s => {
+                const update = data.servers.find(u => u.id === s.id);
+                return update ? { ...s, healthy: update.healthy } : s;
+              });
+            }
+          };
+        },
+
+        formatUptime(seconds) {
+          if (!seconds) return '0s';
+          if (seconds < 60) return seconds + 's';
+          if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+          return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm';
+        }
+      };
+    }
+  </script>
+</body>
+</html>

@@ -2,6 +2,7 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -333,8 +334,11 @@ export class ProxyServer {
     }
   }
 
-  async start(): Promise<void> {
-    if (this.config.transport.stdio) {
+  async start(injectedTransport?: Transport): Promise<void> {
+    if (injectedTransport) {
+      await this.server.connect(injectedTransport);
+      console.error("[ToolStream] Proxy started on injected transport");
+    } else if (this.config.transport.stdio) {
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
       console.error("[ToolStream] Proxy started on stdio transport");

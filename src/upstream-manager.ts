@@ -172,7 +172,7 @@ export class UpstreamManager {
   }
 
   isConnected(serverId: string): boolean {
-    return this.connections.has(serverId);
+    return this.connections.get(serverId)?.healthy ?? false;
   }
 
   async disconnectAll(): Promise<void> {

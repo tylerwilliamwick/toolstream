@@ -1,0 +1,272 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f1117;
+  color: #e1e4e8;
+  line-height: 1.5;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+header {
+  margin-bottom: 2rem;
+}
+
+h1 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.subtitle {
+  color: #8b949e;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #c9d1d9;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #58a6ff;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #8b949e;
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Panels */
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.panel {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.panel:last-child {
+  grid-column: 1 / -1;
+}
+
+/* Server List */
+.server-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #21262d;
+}
+
+.server-row:last-child {
+  border-bottom: none;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.healthy {
+  background: #3fb950;
+  box-shadow: 0 0 6px rgba(63, 185, 80, 0.4);
+}
+
+.status-dot.unhealthy {
+  background: #f85149;
+  box-shadow: 0 0 6px rgba(248, 81, 73, 0.4);
+}
+
+.server-name {
+  font-weight: 500;
+  flex: 1;
+}
+
+.server-id {
+  color: #8b949e;
+  font-size: 0.85rem;
+  font-family: monospace;
+}
+
+.server-tools {
+  color: #8b949e;
+  font-size: 0.85rem;
+}
+
+.server-transport {
+  color: #8b949e;
+  font-size: 0.75rem;
+  background: #21262d;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+/* Config Grid */
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.config-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #21262d;
+}
+
+.config-label {
+  color: #8b949e;
+  font-size: 0.85rem;
+}
+
+.config-value {
+  font-family: monospace;
+  color: #58a6ff;
+  font-size: 0.85rem;
+}
+
+/* Search */
+.search-bar {
+  margin-bottom: 1rem;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #e1e4e8;
+  font-size: 0.9rem;
+}
+
+.search-bar input::placeholder {
+  color: #484f58;
+}
+
+.search-bar input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+/* Tool List */
+.tool-row {
+  display: grid;
+  grid-template-columns: 100px 180px 1fr;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #21262d;
+  font-size: 0.85rem;
+}
+
+.tool-row:last-child {
+  border-bottom: none;
+}
+
+.tool-server {
+  color: #8b949e;
+  font-family: monospace;
+}
+
+.tool-name {
+  font-weight: 500;
+  font-family: monospace;
+  color: #58a6ff;
+}
+
+.tool-desc {
+  color: #8b949e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.pagination button {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pagination button:hover:not(:disabled) {
+  background: #30363d;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.empty {
+  color: #484f58;
+  text-align: center;
+  padding: 1rem;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .panels {
+    grid-template-columns: 1fr;
+  }
+  .tool-row {
+    grid-template-columns: 80px 1fr;
+  }
+  .tool-desc {
+    display: none;
+  }
+}
