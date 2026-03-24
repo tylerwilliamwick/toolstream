@@ -61,7 +61,7 @@ describe("ToolRegistry", () => {
     ]);
 
     const queryVector = await engine.embed("read a file");
-    const results = registry.topKByVector(queryVector, 3);
+    const results = await registry.topKByVector(queryVector, 3);
 
     expect(results.length).toBeLessThanOrEqual(3);
     expect(results.length).toBeGreaterThan(0);
@@ -96,7 +96,7 @@ describe("ToolRegistry", () => {
     registry.deactivateServerTools("fs");
 
     const queryVector = await engine.embed("read a file");
-    const results = registry.topKByVector(queryVector, 5);
+    const results = await registry.topKByVector(queryVector, 5);
     // Should not include deactivated tools
     const fsTools = results.filter((r) => r.tool.serverId === "fs");
     expect(fsTools).toHaveLength(0);
@@ -109,9 +109,9 @@ describe("ToolRegistry", () => {
     expect(servers.map((s) => s.id)).toContain("github");
   });
 
-  it("handles empty index gracefully", () => {
+  it("handles empty index gracefully", async () => {
     const queryVector = new Float32Array(384).fill(0);
-    const results = registry.topKByVector(queryVector, 5);
+    const results = await registry.topKByVector(queryVector, 5);
     expect(results).toHaveLength(0);
   });
 
@@ -123,5 +123,26 @@ describe("ToolRegistry", () => {
 
     const match = registry.findClosestTool("read_fil"); // typo
     expect(match).toBe("fs:read_file");
+  });
+
+  it("concurrent registerTools and topKByVector complete without error", async () => {
+    // Pre-populate so topKByVector has something to iterate over
+    await registry.registerTools("fs", [
+      { name: "read_file", description: "Read a file from disk", inputSchema: { type: "object" } },
+    ]);
+
+    // Start a second registerTools and a topKByVector concurrently
+    const queryVector = await engine.embed("write a file");
+    const [, results] = await Promise.all([
+      registry.registerTools("github", [
+        { name: "create_issue", description: "Create a GitHub issue", inputSchema: { type: "object" } },
+      ]),
+      registry.topKByVector(queryVector, 5),
+    ]);
+
+    // Both should complete; results is a valid array
+    expect(Array.isArray(results)).toBe(true);
+    // After both settle the index should contain both servers' tools
+    expect(registry.indexSize).toBe(2);
   });
 });

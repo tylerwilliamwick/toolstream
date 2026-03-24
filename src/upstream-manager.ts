@@ -54,6 +54,22 @@ export class UpstreamManager {
 
       await client.connect(transport);
 
+      transport.onclose = () => {
+        const conn = this.connections.get(config.id);
+        if (conn) {
+          conn.healthy = false;
+          console.warn(`[UpstreamManager] Server '${config.id}' disconnected`);
+        }
+      };
+
+      transport.onerror = (err: Error) => {
+        const conn = this.connections.get(config.id);
+        if (conn) {
+          conn.healthy = false;
+          console.error(`[UpstreamManager] Server '${config.id}' error:`, err.message);
+        }
+      };
+
       this.connections.set(config.id, {
         config,
         client,
@@ -75,9 +91,8 @@ export class UpstreamManager {
         `[UpstreamManager] Connected to server '${config.id}' (${config.name})`
       );
     } else {
-      // HTTP transport - placeholder for future implementation
-      console.warn(
-        `[UpstreamManager] HTTP transport not yet implemented for server '${config.id}'`
+      throw new Error(
+        `HTTP transport is not yet supported for server '${config.id}'. Use stdio transport instead.`
       );
     }
   }

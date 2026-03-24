@@ -116,6 +116,16 @@ servers: []
     expect(() => loadConfig(configPath)).toThrow("command");
   });
 
+  it("rejects HTTP transport as not yet supported", () => {
+    const httpConfig = VALID_CONFIG.replace('transport: "stdio"', 'transport: "http"').replace(
+      '    command: "echo"\n    args: ["test"]\n',
+      '    url: "http://localhost:3000"\n'
+    );
+    writeFileSync(configPath, httpConfig);
+    expect(() => loadConfig(configPath)).toThrow(ConfigValidationError);
+    expect(() => loadConfig(configPath)).toThrow("not yet supported");
+  });
+
   it("throws for invalid auth type", () => {
     const badAuth = VALID_CONFIG.replace('type: "none"', 'type: "magic"');
     writeFileSync(configPath, badAuth);

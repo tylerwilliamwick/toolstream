@@ -127,6 +127,12 @@ function parseServerConfig(raw: any, index: number): ServerConfig {
       `Must be 'stdio' or 'http', got '${raw.transport}'`
     );
   }
+  if (raw.transport === "http") {
+    throw new ConfigValidationError(
+      `${prefix}.transport`,
+      "HTTP transport is not yet supported. Use 'stdio' instead."
+    );
+  }
 
   if (raw.transport === "stdio" && !raw.command) {
     throw new ConfigValidationError(

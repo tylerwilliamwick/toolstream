@@ -138,4 +138,33 @@ describe("SessionManager", () => {
     manager.createSession();
     expect(manager.sessionCount).toBe(2);
   });
+
+  describe("context buffer cap", () => {
+    it("caps buffer at maxContextBuffer after 100 updates", () => {
+      const capped = new SessionManager(db, 5000, 6);
+      const session = capped.createSession();
+      for (let i = 0; i < 100; i++) {
+        capped.updateContext(session.id, `message ${i}`);
+      }
+      expect(session.contextBuffer).toHaveLength(6);
+    });
+
+    it("keeps newest entries and drops oldest", () => {
+      const capped = new SessionManager(db, 5000, 3);
+      const session = capped.createSession();
+      for (let i = 0; i < 5; i++) {
+        capped.updateContext(session.id, `message ${i}`);
+      }
+      expect(session.contextBuffer).toEqual(["message 2", "message 3", "message 4"]);
+    });
+
+    it("default maxContextBuffer is 6", () => {
+      const defaultManager = new SessionManager(db, 5000);
+      const session = defaultManager.createSession();
+      for (let i = 0; i < 10; i++) {
+        defaultManager.updateContext(session.id, `message ${i}`);
+      }
+      expect(session.contextBuffer).toHaveLength(6);
+    });
+  });
 });

@@ -31,7 +31,7 @@ export class SemanticRouter {
     }
 
     const queryVector = await this.embedEngine.embed(queryText);
-    const candidates = this.registry.topKByVector(queryVector, this.topK);
+    const candidates = await this.registry.topKByVector(queryVector, this.topK);
     const passing = candidates.filter((c) => c.score >= this.threshold);
 
     return {
@@ -42,6 +42,6 @@ export class SemanticRouter {
 
   async search(query: string, k: number) {
     const queryVector = await this.embedEngine.embed(query);
-    return this.registry.topKByVector(queryVector, k);
+    return await this.registry.topKByVector(queryVector, k);
   }
 }
