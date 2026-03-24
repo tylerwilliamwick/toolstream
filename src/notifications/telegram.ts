@@ -73,7 +73,6 @@ export class TelegramNotifier {
       body: JSON.stringify({
         chat_id: this.config.chatId,
         text,
-        parse_mode: "HTML",
       }),
     });
     return response.ok;

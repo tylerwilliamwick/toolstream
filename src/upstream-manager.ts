@@ -61,7 +61,7 @@ export class UpstreamManager {
       const transport = new StdioClientTransport({
         command: config.command,
         args: config.args || [],
-        env: this.buildEnv(config.auth),
+        env: this.buildEnv(config),
       });
 
       const client = new Client(
@@ -168,7 +168,7 @@ export class UpstreamManager {
     const transport = new StdioClientTransport({
       command: config.command!,
       args: config.args || [],
-      env: this.buildEnv(config.auth),
+      env: this.buildEnv(config),
     });
 
     const client = new Client(
@@ -330,17 +330,30 @@ export class UpstreamManager {
     this.connections.clear();
   }
 
-  private buildEnv(auth: AuthConfig): Record<string, string> {
-    const env: Record<string, string> = { ...process.env } as Record<
-      string,
-      string
-    >;
+  private buildEnv(config: ServerConfig): Record<string, string> {
+    // Security: allowlist-only environment for child processes.
+    // Only pass PATH, HOME, and explicitly listed env vars.
+    const env: Record<string, string> = {
+      PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin",
+      HOME: process.env.HOME || "",
+      NODE_ENV: process.env.NODE_ENV || "production",
+    };
 
-    if (auth.type === "env" || auth.type === "bearer") {
-      if (auth.tokenEnv) {
-        const token = process.env[auth.tokenEnv];
-        if (token) {
-          env[auth.tokenEnv] = token;
+    // Pass auth token if configured
+    const auth = config.auth;
+    if ((auth.type === "env" || auth.type === "bearer") && auth.tokenEnv) {
+      const token = process.env[auth.tokenEnv];
+      if (token) {
+        env[auth.tokenEnv] = token;
+      }
+    }
+
+    // Pass explicitly listed env vars (allowlist per server)
+    if (config.envPassthrough) {
+      for (const varName of config.envPassthrough) {
+        const value = process.env[varName];
+        if (value !== undefined) {
+          env[varName] = value;
         }
       }
     }
