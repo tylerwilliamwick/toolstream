@@ -14,6 +14,17 @@ export interface UpstreamConnection {
   reconnecting: boolean;
 }
 
+const CONNECT_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timed out after ${ms}ms: ${label}`)), ms)
+    ),
+  ]);
+}
+
 export class UpstreamManager {
   private connections: Map<string, UpstreamConnection> = new Map();
   private registry: ToolRegistry;
@@ -69,7 +80,11 @@ export class UpstreamManager {
         { capabilities: {} }
       );
 
-      await client.connect(transport);
+      await withTimeout(
+        client.connect(transport),
+        CONNECT_TIMEOUT_MS,
+        `connect to '${config.id}'`
+      );
 
       transport.onclose = () => {
         const conn = this.connections.get(config.id);
@@ -125,6 +140,14 @@ export class UpstreamManager {
     this.attemptReconnect(serverId, 0);
   }
 
+  public forceReconnect(serverId: string): void {
+    const conn = this.connections.get(serverId);
+    if (!conn) return;
+    // Reset reconnecting flag so scheduleReconnect won't no-op
+    conn.reconnecting = false;
+    this.scheduleReconnect(serverId);
+  }
+
   private attemptReconnect(serverId: string, attempt: number): void {
     const MAX_ATTEMPTS = 10;
     const conn = this.connections.get(serverId);
@@ -176,7 +199,11 @@ export class UpstreamManager {
       { capabilities: {} }
     );
 
-    await client.connect(transport);
+    await withTimeout(
+      client.connect(transport),
+      CONNECT_TIMEOUT_MS,
+      `reconnect to '${serverId}'`
+    );
 
     // Attach listeners to new transport
     transport.onclose = () => {
