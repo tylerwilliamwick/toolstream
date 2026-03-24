@@ -11,14 +11,17 @@ export class SessionManager {
   private sessions: Map<string, SessionState> = new Map();
   private db: ToolStreamDatabase;
   private sessionTimeoutMs: number;
+  private maxContextBuffer: number;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     db: ToolStreamDatabase,
-    sessionTimeoutMs: number = DEFAULT_SESSION_TIMEOUT_MS
+    sessionTimeoutMs: number = DEFAULT_SESSION_TIMEOUT_MS,
+    maxContextBuffer: number = 6
   ) {
     this.db = db;
     this.sessionTimeoutMs = sessionTimeoutMs;
+    this.maxContextBuffer = maxContextBuffer;
   }
 
   startCleanup(): void {
@@ -62,6 +65,10 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     session.contextBuffer.push(text);
+    // Cap buffer size, drop oldest entries
+    while (session.contextBuffer.length > this.maxContextBuffer) {
+      session.contextBuffer.shift();
+    }
     session.lastActiveAt = Date.now();
     this.db.touchSession(sessionId);
   }

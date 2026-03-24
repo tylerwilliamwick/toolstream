@@ -1,4 +1,4 @@
-# toolstream.config.yaml
+# toolstream.config.yaml - Hybrid setup (github + obsidian proxied, atlassian direct)
 
 toolstream:
   transport:
@@ -19,13 +19,21 @@ toolstream:
 
   storage:
     provider: "sqlite"
-    sqlite_path: "./toolstream.db"
+    sqlite_path: "/Users/tylerwick/Projects/toolstream/toolstream.db"
 
 servers:
-  - id: "filesystem"
-    name: "Filesystem Server"
+  - id: "github"
+    name: "GitHub"
     transport: "stdio"
     command: "npx"
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    args: ["-y", "@modelcontextprotocol/server-github"]
+    auth:
+      type: "none"
+
+  - id: "obsidian"
+    name: "Obsidian"
+    transport: "stdio"
+    command: "npx"
+    args: ["-y", "@mauricio.wolff/mcp-obsidian", "/Users/tylerwick/Vault"]
     auth:
       type: "none"

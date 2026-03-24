@@ -140,7 +140,7 @@ describe("Routing Quality - Precision@5", () => {
 
     for (const { query, expectedToolId } of GROUND_TRUTH) {
       const queryVector = await engine.embed(query);
-      const results = registry.topKByVector(queryVector, 5);
+      const results = await registry.topKByVector(queryVector, 5);
       const returnedIds = results.map((r) => r.tool.id);
 
       if (returnedIds.includes(expectedToolId)) {

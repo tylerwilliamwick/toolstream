@@ -12,6 +12,24 @@ export class ToolRegistry {
   // In-memory vector index: toolId -> Float32Array
   private vectorIndex: Map<string, Float32Array> = new Map();
 
+  // Simple promise-based write lock to guard vectorIndex mutations
+  private writeLock: Promise<void> = Promise.resolve();
+  private writeResolver: (() => void) | null = null;
+
+  private async acquireWriteLock(): Promise<void> {
+    await this.writeLock;
+    this.writeLock = new Promise(resolve => {
+      this.writeResolver = resolve;
+    });
+  }
+
+  private releaseWriteLock(): void {
+    if (this.writeResolver) {
+      this.writeResolver();
+      this.writeResolver = null;
+    }
+  }
+
   constructor(
     db: ToolStreamDatabase,
     embedEngine: EmbeddingEngine,
@@ -63,13 +81,18 @@ export class ToolRegistry {
       toolIds.push(toolId);
     }
 
-    // Generate embeddings in batch
+    // Generate embeddings in batch (with write lock)
     if (descriptions.length > 0) {
-      const vectors = await this.embedEngine.embedBatch(descriptions);
-      for (let i = 0; i < toolIds.length; i++) {
-        const buffer = Buffer.from(vectors[i].buffer);
-        this.db.insertEmbedding(toolIds[i], buffer, this.modelId);
-        this.vectorIndex.set(toolIds[i], vectors[i]);
+      await this.acquireWriteLock();
+      try {
+        const vectors = await this.embedEngine.embedBatch(descriptions);
+        for (let i = 0; i < toolIds.length; i++) {
+          const buffer = Buffer.from(vectors[i].buffer);
+          this.db.insertEmbedding(toolIds[i], buffer, this.modelId);
+          this.vectorIndex.set(toolIds[i], vectors[i]);
+        }
+      } finally {
+        this.releaseWriteLock();
       }
     }
 
@@ -79,7 +102,8 @@ export class ToolRegistry {
     );
   }
 
-  topKByVector(queryVector: Float32Array, k: number): ScoredTool[] {
+  async topKByVector(queryVector: Float32Array, k: number): Promise<ScoredTool[]> {
+    await this.writeLock; // Wait for any pending write to finish
     const scores: Array<{ toolId: string; score: number }> = [];
 
     for (const [toolId, vector] of this.vectorIndex) {
@@ -110,6 +134,7 @@ export class ToolRegistry {
     }
     return results;
   }
+
 
   getToolById(id: string): ToolRecord | null {
     const row = this.db.getToolById(id);

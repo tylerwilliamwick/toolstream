@@ -183,6 +183,42 @@ describe("UpstreamManager", () => {
     expect(b!.name).toBe("Server server-b");
   });
 
+  // --- transport disconnect detection ---
+
+  it("transport onclose sets healthy to false", () => {
+    const config = makeServerConfig("close-server", "none");
+    injectFakeConnection(manager, "close-server", config, true);
+
+    const conn = (manager as any).connections.get("close-server");
+    expect(conn.healthy).toBe(true);
+
+    // Simulate the transport closing by invoking onclose directly
+    // (mirrors what connectServer attaches after client.connect)
+    conn.transport.onclose = () => {
+      const c = (manager as any).connections.get("close-server");
+      if (c) c.healthy = false;
+    };
+    conn.transport.onclose();
+
+    expect(manager.isConnected("close-server")).toBe(false);
+  });
+
+  it("transport onerror sets healthy to false", () => {
+    const config = makeServerConfig("error-server", "none");
+    injectFakeConnection(manager, "error-server", config, true);
+
+    const conn = (manager as any).connections.get("error-server");
+    expect(conn.healthy).toBe(true);
+
+    conn.transport.onerror = (err: Error) => {
+      const c = (manager as any).connections.get("error-server");
+      if (c) c.healthy = false;
+    };
+    conn.transport.onerror(new Error("process died"));
+
+    expect(manager.isConnected("error-server")).toBe(false);
+  });
+
   it("getServerStatus() shows correct tool count after tools are inserted", () => {
     const config = makeServerConfig("count-server", "none");
     db.insertServer("count-server", "Count Server", "stdio");
