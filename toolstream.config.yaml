@@ -1,4 +1,4 @@
-# toolstream.config.yaml - Hybrid setup (github + obsidian proxied, atlassian direct)
+# toolstream.config.yaml - All servers proxied (github, obsidian, atlassian)
 
 toolstream:
   transport:

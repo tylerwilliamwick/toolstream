@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1] - 2026-03-24
+
+### Added
+- Atlassian (Jira + Confluence) integration via `mcp-atlassian` with `env_passthrough` for credentials
+- Documentation for `env_passthrough` pattern in README, examples, and setup guide
+
+### Changed
+- Updated "Full stack" config example to use `mcp-atlassian` (replaces old `@modelcontextprotocol/server-jira`)
+- README flowchart now includes Atlassian server
+- Token savings table updated with real-world Atlassian numbers (72 tools, 96% reduction)
+
 ## [1.0.0] - 2026-03-24
 
 ### Added

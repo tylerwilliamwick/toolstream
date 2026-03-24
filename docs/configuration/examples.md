@@ -85,15 +85,20 @@ servers:
 
 ---
 
-## Full stack: GitHub, Jira, filesystem, Slack
+## Full stack: GitHub, Atlassian (Jira + Confluence), filesystem, Slack
 
-A heavier setup for teams that use multiple services. This is where ToolStream's token savings become most dramatic. Without ToolStream, 4 servers with 30+ tools each sends 120+ tool schemas every turn.
+A heavier setup for teams that use multiple services. This is where ToolStream's token savings become most dramatic. Without ToolStream, 4 servers with 30+ tools each sends 120+ tool schemas every turn. Atlassian alone contributes 72 tools.
 
-Prerequisites:
+Prerequisites: set environment variables before starting ToolStream, or pass them via `env` in your Claude Code config.
 
 ```bash
 export GITHUB_TOKEN="your-github-token"
-export JIRA_TOKEN="your-jira-api-token"
+export JIRA_URL="https://yourorg.atlassian.net"
+export JIRA_USERNAME="you@example.com"
+export JIRA_API_TOKEN="your-jira-api-token"
+export CONFLUENCE_URL="https://yourorg.atlassian.net/wiki"
+export CONFLUENCE_USERNAME="you@example.com"
+export CONFLUENCE_API_TOKEN="your-confluence-api-token"
 export SLACK_TOKEN="your-slack-bot-token"
 ```
 
@@ -130,14 +135,20 @@ servers:
       type: "bearer"
       token_env: "GITHUB_TOKEN"
 
-  - id: "jira"
-    name: "Jira"
+  - id: "mcp-atlassian"
+    name: "Atlassian (Jira + Confluence)"
     transport: "stdio"
-    command: "npx"
-    args: ["-y", "@modelcontextprotocol/server-jira"]
+    command: "uvx"
+    args: ["mcp-atlassian"]
     auth:
-      type: "bearer"
-      token_env: "JIRA_TOKEN"
+      type: "none"
+    env_passthrough:
+      - "JIRA_URL"
+      - "JIRA_USERNAME"
+      - "JIRA_API_TOKEN"
+      - "CONFLUENCE_URL"
+      - "CONFLUENCE_USERNAME"
+      - "CONFLUENCE_API_TOKEN"
 
   - id: "slack"
     name: "Slack"
@@ -150,6 +161,7 @@ servers:
 ```
 
 Notes on this config:
+- **Atlassian uses `env_passthrough`** instead of bearer auth. The `mcp-atlassian` server reads credentials from environment variables. List the variable names in `env_passthrough` so ToolStream forwards them from the parent process to the child.
 - `confidence_threshold` is raised slightly to 0.35 because there are more tools competing. This keeps the signal-to-noise ratio clean.
 - `context_window_turns` is raised to 4 because multi-server workflows often span more context.
 - `top_k` stays at 5. With good routing, 5 tools per turn is enough for most tasks.

@@ -66,13 +66,24 @@ Find the `mcpServers` section in the file. If it doesn't exist, add it. The full
       "args": [
         "/Users/yourname/toolstream/dist/index.js",
         "/Users/yourname/toolstream/my-config.yaml"
-      ]
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "your-github-token",
+        "JIRA_URL": "https://yourorg.atlassian.net",
+        "JIRA_USERNAME": "you@example.com",
+        "JIRA_API_TOKEN": "your-api-token",
+        "CONFLUENCE_URL": "https://yourorg.atlassian.net/wiki",
+        "CONFLUENCE_USERNAME": "you@example.com",
+        "CONFLUENCE_API_TOKEN": "your-api-token"
+      }
     }
   }
 }
 ```
 
 Replace the two paths with the actual paths you saved in Step 2.
+
+The `env` block passes credentials to ToolStream. Upstream servers that need these credentials use `env_passthrough` in the YAML config to receive them. Only include the env vars your servers need.
 
 If you already have other MCP server entries, add `toolstream` alongside them. But read Step 5 first.
 
@@ -134,8 +145,9 @@ Claude should respond by calling `discover_servers` and listing your servers. Yo
 
 ```
 I can see the following MCP servers via ToolStream:
-- filesystem (12 tools)
-- github (31 tools)
+- github (26 tools)
+- obsidian (14 tools)
+- mcp-atlassian (72 tools)
 ```
 
 If Claude doesn't mention ToolStream or your servers, check the [Troubleshooting](../troubleshooting.md) guide.
