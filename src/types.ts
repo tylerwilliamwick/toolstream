@@ -36,6 +36,7 @@ export interface ServerConfig {
   args?: string[];
   url?: string;
   auth: AuthConfig;
+  envPassthrough?: string[]; // Env var names to pass to child process (security: allowlist)
 }
 
 export interface AuthConfig {

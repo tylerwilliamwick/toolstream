@@ -29,6 +29,7 @@ servers:
     args: ["-y", "@modelcontextprotocol/server-github"]
     auth:
       type: "none"
+    env_passthrough: ["GITHUB_PERSONAL_ACCESS_TOKEN"]
 
   - id: "obsidian"
     name: "Obsidian"

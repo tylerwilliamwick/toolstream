@@ -125,8 +125,12 @@ export function loadConfig(configPath: string): ToolStreamConfig {
     } : undefined,
     notifications: ts.notifications ? {
       telegram: ts.notifications.telegram ? {
-        botToken: String(ts.notifications.telegram.bot_token || ""),
-        chatId: String(ts.notifications.telegram.chat_id || ""),
+        botToken: ts.notifications.telegram.bot_token
+          ? resolveEnvVar(ts.notifications.telegram.bot_token, "toolstream.notifications.telegram.bot_token")
+          : "",
+        chatId: ts.notifications.telegram.chat_id
+          ? resolveEnvVar(ts.notifications.telegram.chat_id, "toolstream.notifications.telegram.chat_id")
+          : "",
         events: Array.isArray(ts.notifications.telegram.events)
           ? ts.notifications.telegram.events.map(String)
           : ["server_down", "server_recovered"],
@@ -184,6 +188,7 @@ function parseServerConfig(raw: any, index: number): ServerConfig {
     args: Array.isArray(raw.args) ? raw.args.map(String) : undefined,
     url: raw.url ? String(raw.url) : undefined,
     auth,
+    envPassthrough: Array.isArray(raw.env_passthrough) ? raw.env_passthrough.map(String) : undefined,
   };
 }
 
