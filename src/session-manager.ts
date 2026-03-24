@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { ToolStreamDatabase } from "./database.js";
 import type { SessionState, ToolRecord, ScoredTool } from "./types.js";
 import { META_TOOL_SCHEMAS } from "./meta-tools.js";
+import { logger } from "./logger.js";
 
 const DEFAULT_SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 

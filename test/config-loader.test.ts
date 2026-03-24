@@ -152,13 +152,13 @@ servers: []
       /servers:\n.*- id.*\n.*name.*\n.*transport.*\n.*command.*\n.*args.*\n.*auth.*\n.*type.*\n/s,
       "servers: []\n"
     );
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     writeFileSync(configPath, emptyServers);
     expect(() => loadConfig(configPath)).not.toThrow();
-    expect(warnSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("No servers configured")
     );
-    warnSpy.mockRestore();
+    stderrSpy.mockRestore();
   });
 
   it("throws ConfigValidationError with user-friendly message for malformed YAML", () => {

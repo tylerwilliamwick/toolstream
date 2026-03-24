@@ -4,6 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { ServerConfig, AuthConfig } from "./types.js";
 import type { ToolRegistry } from "./tool-registry.js";
+import { logger } from "./logger.js";
 
 export interface UpstreamConnection {
   config: ServerConfig;
@@ -44,7 +45,7 @@ export class UpstreamManager {
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.status === "rejected") {
-        console.warn(
+        logger.warn(
           `[UpstreamManager] Failed to connect to server '${servers[i].id}': ${result.reason}`
         );
       }
@@ -82,7 +83,7 @@ export class UpstreamManager {
         const conn = this.connections.get(config.id);
         if (conn) {
           conn.healthy = false;
-          console.error(`[UpstreamManager] Server '${config.id}' error:`, err.message);
+          logger.error(`[UpstreamManager] Server '${config.id}' error: ${err.message}`);
         }
       };
 
@@ -104,7 +105,7 @@ export class UpstreamManager {
       // Discover and register tools
       await this.syncTools(config.id);
 
-      console.log(
+      logger.info(
         `[UpstreamManager] Connected to server '${config.id}' (${config.name})`
       );
     } else {
@@ -130,7 +131,7 @@ export class UpstreamManager {
     if (!conn) return;
 
     if (attempt >= MAX_ATTEMPTS) {
-      console.error(`[UpstreamManager] Server '${serverId}' permanently failed after ${MAX_ATTEMPTS} attempts`);
+      logger.error(`[UpstreamManager] Server '${serverId}' permanently failed after ${MAX_ATTEMPTS} attempts`);
       conn.reconnecting = false;
       // Emit event for notification system
       this.emit('server_permanently_failed', serverId);
@@ -138,14 +139,14 @@ export class UpstreamManager {
     }
 
     const delay = Math.min(1000 * Math.pow(2, attempt), 30000); // 1s, 2s, 4s... max 30s
-    console.warn(`[UpstreamManager] Reconnecting to '${serverId}' in ${delay}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+    logger.warn(`[UpstreamManager] Reconnecting to '${serverId}' in ${delay}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
 
     setTimeout(async () => {
       try {
         await this.reconnect(serverId);
-        console.log(`[UpstreamManager] Reconnected to '${serverId}' successfully`);
+        logger.info(`[UpstreamManager] Reconnected to '${serverId}' successfully`);
       } catch (err) {
-        console.error(`[UpstreamManager] Reconnect attempt ${attempt + 1} failed for '${serverId}':`, err instanceof Error ? err.message : String(err));
+        logger.error(`[UpstreamManager] Reconnect attempt ${attempt + 1} failed for '${serverId}': ${err instanceof Error ? err.message : String(err)}`);
         this.attemptReconnect(serverId, attempt + 1);
       }
     }, delay);
@@ -190,7 +191,7 @@ export class UpstreamManager {
       const c = this.connections.get(serverId);
       if (c) {
         c.healthy = false;
-        console.error(`[UpstreamManager] Server '${serverId}' error:`, err.message);
+        logger.error(`[UpstreamManager] Server '${serverId}' error: ${err.message}`);
       }
     };
 
@@ -222,9 +223,8 @@ export class UpstreamManager {
       await this.registry.registerTools(serverId, tools);
       conn.healthy = true;
     } catch (err) {
-      console.error(
-        `[UpstreamManager] Failed to sync tools for server '${serverId}':`,
-        err
+      logger.error(
+        `[UpstreamManager] Failed to sync tools for server '${serverId}': ${err instanceof Error ? err.message : String(err)}`
       );
       conn.healthy = false;
     }
@@ -262,7 +262,7 @@ export class UpstreamManager {
         existing.count += 1;
         if (existing.count > 3) {
           conn.healthy = false;
-          console.warn(`[UpstreamManager] Server '${serverId}' marked unhealthy after ${existing.count} failures within 5 minutes`);
+          logger.warn(`[UpstreamManager] Server '${serverId}' marked unhealthy after ${existing.count} failures within 5 minutes`);
         }
       } else {
         this.failureCounts.set(serverId, { count: 1, firstAt: now });
@@ -324,7 +324,7 @@ export class UpstreamManager {
       try {
         await conn.transport.close();
       } catch {
-        console.warn(`[UpstreamManager] Error disconnecting server '${id}'`);
+        logger.warn(`[UpstreamManager] Error disconnecting server '${id}'`);
       }
     }
     this.connections.clear();

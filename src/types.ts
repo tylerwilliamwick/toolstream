@@ -64,6 +64,19 @@ export interface ToolStreamConfig {
     sqlitePath?: string;
   };
   servers: ServerConfig[];
+  logging?: {
+    level: "error" | "warn" | "info" | "debug";
+    file: string;
+    maxSizeMb: number;
+  };
+  notifications?: {
+    telegram?: {
+      botToken: string;
+      chatId: string;
+      events: string[];
+      throttleSeconds: number;
+    };
+  };
 }
 
 export interface ServerRecord {
