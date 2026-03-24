@@ -118,7 +118,7 @@ You should see a line with `com.toolstream.proxy` and a process ID (not a dash) 
 
 The `bin/launch.sh` wrapper handles secrets before starting the node process. It does two things:
 
-1. Sources `~/REDACTED-service/.env` if it exists, which sets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` for Telegram notifications.
+1. Sources a `.env` file of your choice (edit the script to point at your credentials file) for any env vars your upstream servers need.
 2. Reads your GitHub Personal Access Token from the macOS Keychain (using the `github-pat` keychain item) and falls back to the existing environment variable if the keychain lookup fails.
 
 Point your LaunchAgent at `bin/launch.sh` rather than calling `node` directly. This keeps secrets out of your plist file.
