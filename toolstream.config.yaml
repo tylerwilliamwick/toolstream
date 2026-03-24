@@ -38,3 +38,18 @@ servers:
     args: ["-y", "@mauricio.wolff/mcp-obsidian", "/Users/tylerwick/Vault"]
     auth:
       type: "none"
+
+  - id: "mcp-atlassian"
+    name: "Atlassian (Jira + Confluence)"
+    transport: "stdio"
+    command: "uvx"
+    args: ["mcp-atlassian"]
+    auth:
+      type: "none"
+    env_passthrough:
+      - "JIRA_URL"
+      - "JIRA_USERNAME"
+      - "JIRA_API_TOKEN"
+      - "CONFLUENCE_URL"
+      - "CONFLUENCE_USERNAME"
+      - "CONFLUENCE_API_TOKEN"

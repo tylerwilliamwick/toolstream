@@ -56,6 +56,21 @@ export const META_TOOL_SCHEMAS = [
       required: ["server", "tool", "arguments"],
     },
   },
+  {
+    name: "reconnect_server",
+    description:
+      "Force-reconnect a specific upstream server. Use when execute_tool returns server_not_connected or server_reconnecting.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        server_id: {
+          type: "string" as const,
+          description: "Server ID from discover_servers.",
+        },
+      },
+      required: ["server_id"],
+    },
+  },
 ] as const;
 
 export type MetaToolName = (typeof META_TOOL_SCHEMAS)[number]["name"];

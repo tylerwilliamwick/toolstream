@@ -263,16 +263,17 @@ export class ProxyServer {
         }
 
         if (!this.upstreamManager.isConnected(server)) {
+          const conn = this.upstreamManager.getConnection(server);
+          if (conn?.reconnecting) {
+            return {
+              content: [{ type: "text" as const, text: JSON.stringify({ error: "server_reconnecting", server_id: server, message: "Server is reconnecting. Retry in a few seconds." }) }],
+              isError: true,
+            };
+          }
+          // Permanently failed or never connected — kick off a fresh reconnect
+          this.upstreamManager.forceReconnect(server);
           return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error: "server_not_connected",
-                  server_id: server,
-                }),
-              },
-            ],
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "server_not_connected", server_id: server, message: "Reconnect initiated. Retry in ~5 seconds." }) }],
             isError: true,
           };
         }
@@ -295,6 +296,27 @@ export class ProxyServer {
             isError: true,
           };
         }
+      }
+
+      case "reconnect_server": {
+        const serverId = args.server_id as string;
+        if (!serverId) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "server_id parameter is required" }) }],
+            isError: true,
+          };
+        }
+        const conn = this.upstreamManager.getConnection(serverId);
+        if (!conn) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "unknown_server", server_id: serverId }) }],
+            isError: true,
+          };
+        }
+        this.upstreamManager.forceReconnect(serverId);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ status: "reconnecting", server_id: serverId, message: "Reconnect scheduled. Retry execute_tool in ~5 seconds." }) }],
+        };
       }
 
       default:
