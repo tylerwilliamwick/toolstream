@@ -11,6 +11,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
+    "test:smoke": "vitest run test/smoke.test.ts",
     "test:watch": "vitest"
   },
   "files": [
