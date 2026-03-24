@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import yaml from "js-yaml";
 import type { ToolStreamConfig, ServerConfig, AuthConfig } from "./types.js";
+import { logger } from "./logger.js";
 
 export class ConfigValidationError extends Error {
   constructor(
@@ -82,7 +83,7 @@ export function loadConfig(configPath: string): ToolStreamConfig {
     throw new ConfigValidationError("servers", "Missing required array 'servers'");
   }
   if (servers.length === 0) {
-    console.warn("[Config] Warning: No servers configured. Toolstream will start with meta-tools only.");
+    logger.warn("No servers configured. Toolstream will start with meta-tools only.");
   }
 
   const parsedServers: ServerConfig[] = servers.map(
@@ -117,6 +118,21 @@ export function loadConfig(configPath: string): ToolStreamConfig {
       sqlitePath: String(ts.storage.sqlite_path || "./toolstream.db"),
     },
     servers: parsedServers,
+    logging: ts.logging ? {
+      level: (ts.logging.level || "info") as "error" | "warn" | "info" | "debug",
+      file: String(ts.logging.file || "~/.toolstream/logs/toolstream.log"),
+      maxSizeMb: Number(ts.logging.max_size_mb) || 50,
+    } : undefined,
+    notifications: ts.notifications ? {
+      telegram: ts.notifications.telegram ? {
+        botToken: String(ts.notifications.telegram.bot_token || ""),
+        chatId: String(ts.notifications.telegram.chat_id || ""),
+        events: Array.isArray(ts.notifications.telegram.events)
+          ? ts.notifications.telegram.events.map(String)
+          : ["server_down", "server_recovered"],
+        throttleSeconds: Number(ts.notifications.telegram.throttle_seconds) || 300,
+      } : undefined,
+    } : undefined,
   };
 }
 

@@ -14,6 +14,7 @@ import type { ToolRegistry } from "./tool-registry.js";
 import type { UpstreamManager } from "./upstream-manager.js";
 import type { DependencyResolver } from "./dependency-resolver.js";
 import { isMetaTool } from "./meta-tools.js";
+import { logger } from "./logger.js";
 
 export class ProxyServer {
   private server: Server;
@@ -334,18 +335,18 @@ export class ProxyServer {
         await this.notifyToolsChanged();
       }
     } catch (err) {
-      console.error(`[ProxyServer] Error in routeContext:`, err instanceof Error ? err.message : String(err));
+      logger.error(`[ProxyServer] Error in routeContext: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
   async start(injectedTransport?: Transport): Promise<void> {
     if (injectedTransport) {
       await this.server.connect(injectedTransport);
-      console.error("[ToolStream] Proxy started on injected transport");
+      logger.info("[ToolStream] Proxy started on injected transport");
     } else if (this.config.transport.stdio) {
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
-      console.error("[ToolStream] Proxy started on stdio transport");
+      logger.info("[ToolStream] Proxy started on stdio transport");
     }
   }
 
