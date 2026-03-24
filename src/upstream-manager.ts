@@ -5,7 +5,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import type { ServerConfig, AuthConfig } from "./types.js";
 import type { ToolRegistry } from "./tool-registry.js";
 
-interface UpstreamConnection {
+export interface UpstreamConnection {
   config: ServerConfig;
   client: Client;
   transport: StdioClientTransport;
@@ -309,6 +309,10 @@ export class UpstreamManager {
     }
 
     return status;
+  }
+
+  getConnection(serverId: string): UpstreamConnection | undefined {
+    return this.connections.get(serverId);
   }
 
   isConnected(serverId: string): boolean {
