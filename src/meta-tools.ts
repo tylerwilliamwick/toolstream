@@ -1,4 +1,4 @@
-// src/meta-tools.ts - The 3 always-visible meta-tools
+// src/meta-tools.ts - The always-visible meta-tools
 
 export const META_TOOL_SCHEMAS = [
   {

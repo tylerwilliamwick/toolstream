@@ -103,12 +103,13 @@ describe("SessionManager", () => {
     const visible = manager.getVisibleTools(session.id);
     const names = visible.map((t) => t.name);
 
-    // 3 meta-tools + 1 surfaced
+    // 4 meta-tools + 1 surfaced
     expect(names).toContain("discover_servers");
     expect(names).toContain("discover_tools");
     expect(names).toContain("execute_tool");
+    expect(names).toContain("reconnect_server");
     expect(names).toContain("github_create_issue");
-    expect(visible).toHaveLength(4);
+    expect(visible).toHaveLength(5);
   });
 
   it("resolveToolCall resolves namespaced tool", () => {
