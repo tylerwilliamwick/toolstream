@@ -10,15 +10,30 @@ interface UpstreamConnection {
   client: Client;
   transport: StdioClientTransport;
   healthy: boolean;
+  reconnecting: boolean;
 }
 
 export class UpstreamManager {
   private connections: Map<string, UpstreamConnection> = new Map();
   private registry: ToolRegistry;
   private failureCounts: Map<string, { count: number; firstAt: number }> = new Map();
+  private eventListeners: Map<string, Array<(serverId: string) => void>> = new Map();
 
   constructor(registry: ToolRegistry) {
     this.registry = registry;
+  }
+
+  public on(event: string, callback: (serverId: string) => void): void {
+    const listeners = this.eventListeners.get(event) || [];
+    listeners.push(callback);
+    this.eventListeners.set(event, listeners);
+  }
+
+  private emit(event: string, serverId: string): void {
+    const listeners = this.eventListeners.get(event) || [];
+    for (const cb of listeners) {
+      try { cb(serverId); } catch { /* don't let listener errors break the manager */ }
+    }
   }
 
   async connectAll(servers: ServerConfig[]): Promise<void> {
@@ -59,7 +74,7 @@ export class UpstreamManager {
         const conn = this.connections.get(config.id);
         if (conn) {
           conn.healthy = false;
-          console.warn(`[UpstreamManager] Server '${config.id}' disconnected`);
+          this.scheduleReconnect(config.id);
         }
       };
 
@@ -76,6 +91,7 @@ export class UpstreamManager {
         client,
         transport,
         healthy: true,
+        reconnecting: false,
       });
 
       // Register server in DB
@@ -96,6 +112,96 @@ export class UpstreamManager {
         `HTTP transport is not yet supported for server '${config.id}'. Use stdio transport instead.`
       );
     }
+  }
+
+  public scheduleReconnect(serverId: string): void {
+    const conn = this.connections.get(serverId);
+    if (!conn || conn.reconnecting) return; // Guard against duplicate calls
+
+    conn.reconnecting = true;
+    conn.healthy = false;
+
+    this.attemptReconnect(serverId, 0);
+  }
+
+  private attemptReconnect(serverId: string, attempt: number): void {
+    const MAX_ATTEMPTS = 10;
+    const conn = this.connections.get(serverId);
+    if (!conn) return;
+
+    if (attempt >= MAX_ATTEMPTS) {
+      console.error(`[UpstreamManager] Server '${serverId}' permanently failed after ${MAX_ATTEMPTS} attempts`);
+      conn.reconnecting = false;
+      // Emit event for notification system
+      this.emit('server_permanently_failed', serverId);
+      return;
+    }
+
+    const delay = Math.min(1000 * Math.pow(2, attempt), 30000); // 1s, 2s, 4s... max 30s
+    console.warn(`[UpstreamManager] Reconnecting to '${serverId}' in ${delay}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+
+    setTimeout(async () => {
+      try {
+        await this.reconnect(serverId);
+        console.log(`[UpstreamManager] Reconnected to '${serverId}' successfully`);
+      } catch (err) {
+        console.error(`[UpstreamManager] Reconnect attempt ${attempt + 1} failed for '${serverId}':`, err instanceof Error ? err.message : String(err));
+        this.attemptReconnect(serverId, attempt + 1);
+      }
+    }, delay);
+  }
+
+  private async reconnect(serverId: string): Promise<void> {
+    const conn = this.connections.get(serverId);
+    if (!conn) throw new Error(`No connection found for '${serverId}'`);
+
+    // Tear down old transport
+    try {
+      await conn.transport.close();
+    } catch {
+      // Already closed, ignore
+    }
+
+    // Create new transport and client
+    const config = conn.config;
+    const transport = new StdioClientTransport({
+      command: config.command!,
+      args: config.args || [],
+      env: this.buildEnv(config.auth),
+    });
+
+    const client = new Client(
+      { name: "toolstream-proxy", version: "1.0.0" },
+      { capabilities: {} }
+    );
+
+    await client.connect(transport);
+
+    // Attach listeners to new transport
+    transport.onclose = () => {
+      const c = this.connections.get(serverId);
+      if (c) {
+        c.healthy = false;
+        this.scheduleReconnect(serverId);
+      }
+    };
+
+    transport.onerror = (err: Error) => {
+      const c = this.connections.get(serverId);
+      if (c) {
+        c.healthy = false;
+        console.error(`[UpstreamManager] Server '${serverId}' error:`, err.message);
+      }
+    };
+
+    // Update the connection in the Map
+    conn.client = client;
+    conn.transport = transport;
+    conn.healthy = true;
+    conn.reconnecting = false;
+
+    // Re-sync tools (skip embedBatch for tools that already have embeddings)
+    await this.syncTools(serverId);
   }
 
   async syncTools(serverId: string): Promise<void> {
