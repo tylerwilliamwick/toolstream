@@ -1,5 +1,9 @@
 # ToolStream
 
+[![CI](https://github.com/tylerwilliamwick/toolstream/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerwilliamwick/toolstream/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/tylerwilliamwick/toolstream)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
+
 Every time Claude Code starts a conversation, it loads the full list of tools from every connected service. If you have GitHub, Jira, Confluence, and a few other services connected, that can mean 100+ tool definitions sent to the model on every single turn, costing tens of thousands of tokens before you've typed a word.
 
 ToolStream fixes this. It sits between Claude Code and your services, and instead of loading everything upfront, it figures out which tools are relevant based on what you're talking about. If you're discussing a Jira ticket, the Jira tools appear. If you're working with files, the file tools appear. Everything else stays out of the way.
@@ -21,14 +25,14 @@ flowchart TD
     AT["Atlassian\n(Jira + Confluence, 72 tools)"]
     OB["Obsidian\n(14 tools)"]
     OT["Other services..."]
-    TG["Telegram\n(alerts)"]
+    NT["Notifications\n(optional)"]
 
     Client -- "4 tools visible to Claude" --> TS
     TS -- "connects to" --> GH
     TS -- "connects to (with credentials)" --> AT
     TS -- "connects to" --> OB
     TS -- "connects to" --> OT
-    TS -- "sends alerts to" --> TG
+    TS -. "alerts (optional)" .-> NT
 ```
 
 ## Quick Start
@@ -38,14 +42,14 @@ git clone https://github.com/tylerwilliamwick/toolstream.git
 cd toolstream
 npm install
 npm run build
-cp toolstream.config.yaml my-config.yaml
-# Edit my-config.yaml with your MCP servers
-node dist/index.js start my-config.yaml
+cp toolstream.config.example.yaml toolstream.config.yaml
+# Edit toolstream.config.yaml with your MCP servers
+node dist/index.js start toolstream.config.yaml
 ```
 
 ## Configuration
 
-ToolStream uses a YAML config file. See `toolstream.config.yaml` for the full template.
+ToolStream uses a YAML config file. Copy `toolstream.config.example.yaml` to get started.
 
 ```yaml
 toolstream:
