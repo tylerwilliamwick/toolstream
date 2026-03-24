@@ -1,13 +1,13 @@
 #!/bin/bash
 # Toolstream LaunchAgent wrapper
-# Sources secrets from telegram-assistant .env and launches Toolstream
+# Sources credentials and launches Toolstream
 
-# Source Telegram bot credentials
-if [ -f "$HOME/telegram-assistant/.env" ]; then
-  set -a
-  source "$HOME/telegram-assistant/.env"
-  set +a
-fi
+TOOLSTREAM_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Source your credentials, e.g.:
+#   source ~/.config/toolstream/.env
+# Or load from a .env file next to this script:
+#   source "$TOOLSTREAM_DIR/.env"
 
 # GitHub token from macOS Keychain (fallback to env)
 if [ -z "$GITHUB_PERSONAL_ACCESS_TOKEN" ]; then
@@ -15,4 +15,4 @@ if [ -z "$GITHUB_PERSONAL_ACCESS_TOKEN" ]; then
   export GITHUB_PERSONAL_ACCESS_TOKEN
 fi
 
-exec /opt/homebrew/bin/node /Users/tylerwick/projects/toolstream/dist/index.js start /Users/tylerwick/projects/toolstream/toolstream.config.yaml
+exec node "$TOOLSTREAM_DIR/dist/index.js" start "$TOOLSTREAM_DIR/toolstream.config.yaml"

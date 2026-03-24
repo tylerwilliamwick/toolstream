@@ -68,7 +68,7 @@ export TELEGRAM_CHAT_ID="987654321"
 node dist/index.js my-config.yaml
 ```
 
-If you use `bin/launch.sh`, it sources credentials from `~/telegram-assistant/.env` automatically. See [Deployment](deployment.md) for details.
+If you use `bin/launch.sh`, edit the script to source your credentials file before launch. See [Deployment](deployment.md) for details.
 
 ---
 
