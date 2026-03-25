@@ -49,3 +49,4 @@ No capability loss. No extra API calls. No model training required.
 - [Configuration: Examples](configuration/examples.md)
 - [Configuration: Auth Guide](configuration/auth-guide.md)
 - [Troubleshooting](troubleshooting.md)
+- [Roadmap](../ROADMAP.md)

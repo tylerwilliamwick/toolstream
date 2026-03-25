@@ -15,7 +15,7 @@
 
 ### Added
 - Core MCP proxy with semantic tool routing
-- 3 meta-tools: discover_servers, discover_tools, execute_tool
+- 4 meta-tools: discover_servers, discover_tools, execute_tool, reconnect_server
 - Local embedding engine (all-MiniLM-L6-v2, ONNX)
 - SQLite storage with migration support (Schema V2)
 - Interactive CLI: init, add-server, health, doctor, start
