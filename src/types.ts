@@ -15,6 +15,8 @@ export interface SessionState {
   contextBuffer: string[];
   createdAt: number;
   lastActiveAt: number;
+  serverCallCounts: Map<string, number>;
+  consecutiveNonDominantCalls: number;
 }
 
 export interface RouteResult {
@@ -37,6 +39,9 @@ export interface ServerConfig {
   url?: string;
   auth: AuthConfig;
   envPassthrough?: string[]; // Env var names to pass to child process (security: allowlist)
+  routing?: {
+    topK?: number; // Per-server override of global top_k (1-20)
+  };
 }
 
 export interface AuthConfig {
@@ -59,6 +64,7 @@ export interface ToolStreamConfig {
     topK: number;
     confidenceThreshold: number;
     contextWindowTurns: number;
+    popularityPreloadCount?: number;
   };
   storage: {
     provider: "sqlite" | "pgvector";
@@ -78,6 +84,11 @@ export interface ToolStreamConfig {
       throttleSeconds: number;
     };
   };
+}
+
+export interface SessionTopicContext {
+  dominantServerId: string;
+  confidence: number;
 }
 
 export interface ServerRecord {

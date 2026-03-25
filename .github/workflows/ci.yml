@@ -19,3 +19,18 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check internal markdown links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --offline
+            docs/**/*.md
+            ROADMAP.md
+            README.md
+          fail: true

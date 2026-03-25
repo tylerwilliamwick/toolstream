@@ -12,6 +12,19 @@ ToolStream fixes this. It sits between Claude Code and your services, and instea
 
 ## How It Works
 
+### Before and After
+
+<table>
+<tr>
+<td><strong>Before ToolStream</strong></td>
+<td><strong>With ToolStream</strong></td>
+</tr>
+<tr>
+<td><img src="docs/images/before-toolstream.svg" alt="107 tools loaded every turn" width="400"/></td>
+<td><img src="docs/images/after-toolstream.svg" alt="4 meta-tools loaded, rest on demand" width="400"/></td>
+</tr>
+</table>
+
 1. Claude Code connects to ToolStream instead of connecting to each service separately
 2. ToolStream starts with just 4 small tools: discover_servers, discover_tools, execute_tool, and reconnect_server
 3. As the conversation develops, ToolStream automatically brings in the tools that match what you're doing
@@ -159,12 +172,49 @@ npm run build
 
 ## Token Savings
 
-| Scenario | Before | After | Savings |
-|----------|--------|-------|---------|
-| 112 tools (GitHub + Obsidian + Atlassian) | ~35K tokens/session start | ~1.5K tokens/session start | 96% |
-| 200 tools | ~100K tokens/turn | ~2.8K tokens/turn | 97% |
+Without ToolStream, every MCP tool's full schema (description + JSON input schema) is included as input tokens on every API turn, whether or not you use that tool. ToolStream replaces all of them with 4 small meta-tool schemas.
 
-Real-world example: Atlassian alone has 72 tools. Without ToolStream, all 72 tool schemas load on every session start. With ToolStream, they only load when you first call a Jira or Confluence tool.
+### Measured data
+
+The numbers below come from ToolStream's own SQLite database (`toolstream.db`), which stores every proxied tool's description and input schema. You can reproduce them:
+
+```bash
+# Total definition bytes across all proxied tools
+sqlite3 toolstream.db "SELECT SUM(LENGTH(description) + LENGTH(input_schema)) FROM tools WHERE is_active = 1;"
+
+# Per-server breakdown
+sqlite3 toolstream.db "SELECT server_id, COUNT(*), SUM(LENGTH(description) + LENGTH(input_schema)) FROM tools WHERE is_active = 1 GROUP BY server_id;"
+```
+
+**Real-world setup: 112 tools across 3 servers**
+
+| Server | Tools | Definition bytes |
+|--------|------:|-----:|
+| Atlassian (Jira + Confluence) | 72 | 74,151 |
+| GitHub | 26 | 14,271 |
+| Obsidian | 14 | 6,255 |
+| **Total proxied** | **112** | **94,677** |
+| **ToolStream meta-tools** | **4** | **1,393** |
+
+The 4 meta-tool schemas (`discover_servers`, `discover_tools`, `execute_tool`, `reconnect_server`) are defined in `src/meta-tools.ts`. Their combined description + input schema is 1,393 bytes, measured from the same serialization format.
+
+That's a **98.5% reduction** in tool definition bytes sent per turn (94,677 → 1,393).
+
+### What this means per conversation
+
+Tool definitions are input tokens. They're sent on every turn of a conversation, so savings compound with conversation length. Using a rough tokenizer estimate of ~4 characters per token:
+
+| Conversation length | Tokens saved | At $15/M input (Opus) | At $3/M input (Sonnet) |
+|--------------------:|-------------:|----------------------:|-----------------------:|
+| 10 turns | ~233K | ~$3.50 | ~$0.70 |
+| 20 turns | ~466K | ~$7.00 | ~$1.40 |
+| 40 turns | ~933K | ~$14.00 | ~$2.80 |
+
+### What's verified vs estimated
+
+- **Verified:** Tool counts, definition byte sizes, and the byte reduction ratio. These are stored in the SQLite database and the source code. Run the queries above to confirm.
+- **Estimated:** The token-to-dollar conversion. The ~4 chars/token ratio is an approximation for JSON/schema content. Actual tokenization varies by model. The cost-per-million-tokens pricing is model-dependent and subject to change.
+- **Not accounted for:** Whether the LLM client applies any schema compression or caching of its own. If it does, the baseline cost without ToolStream would be lower, and ToolStream's delta would be smaller.
 
 ## Known Limitations
 

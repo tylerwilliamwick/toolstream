@@ -36,16 +36,40 @@ export async function startCommand(
 
   // Initialize embedding engine
   console.error("[ToolStream] Initializing embedding engine...");
-  const embedEngine = new EmbeddingEngine(config.embedding.provider);
+  const embedEngine = new EmbeddingEngine(
+    config.embedding.provider,
+    config.embedding.openaiApiKey,
+    config.embedding.model
+  );
   await embedEngine.initialize();
-  console.error("[ToolStream] Embedding engine ready");
+  console.error(`[ToolStream] Embedding engine ready (${embedEngine.activeProvider})`);
 
   // Initialize components
   const registry = new ToolRegistry(db, embedEngine, config.embedding.model);
+
+  // Check for provider switch: if stored embeddings use a different model, clear and re-embed
+  const existingEmbeddings = db.getAllEmbeddings();
+  if (existingEmbeddings.length > 0) {
+    const storedModelId = existingEmbeddings[0].model_id;
+    const currentModelId = embedEngine.modelId;
+    if (!storedModelId.startsWith(currentModelId.split(":")[0])) {
+      console.error(`[ToolStream] Provider switch detected (${storedModelId} -> ${currentModelId}), re-embedding all tools...`);
+      db.clearEmbeddings();
+      registry.clearVectorIndex();
+    }
+  }
+
   await registry.loadIndex();
 
-  const router = new SemanticRouter(embedEngine, registry, config.routing);
-  const sessionManager = new SessionManager(db);
+  const router = new SemanticRouter(embedEngine, registry, config.routing, config.servers);
+  const sessionManager = new SessionManager(
+    db,
+    undefined,
+    undefined,
+    db,
+    registry,
+    config.routing.popularityPreloadCount ?? 3
+  );
   sessionManager.startCleanup();
 
   const upstreamManager = new UpstreamManager(registry);
@@ -73,6 +97,12 @@ export async function startCommand(
     `[ToolStream] ${healthy}/${status.length} servers connected, ${registry.indexSize} tools indexed`
   );
 
+  // Prune old analytics events (30-day TTL)
+  const pruned = db.pruneOldEvents(30);
+  if (pruned > 0) {
+    console.error(`[ToolStream] Pruned ${pruned} analytics events older than 30 days`);
+  }
+
   // Start proxy server
   const proxy = new ProxyServer(
     config,
@@ -80,7 +110,8 @@ export async function startCommand(
     router,
     registry,
     upstreamManager,
-    dependencyResolver
+    dependencyResolver,
+    db
   );
 
   // Start UI server if requested
