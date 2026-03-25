@@ -12,6 +12,19 @@ ToolStream fixes this. It sits between Claude Code and your services, and instea
 
 ## How It Works
 
+### Before and After
+
+<table>
+<tr>
+<td><strong>Before ToolStream</strong></td>
+<td><strong>With ToolStream</strong></td>
+</tr>
+<tr>
+<td><img src="docs/images/before-toolstream.svg" alt="107 tools loaded every turn" width="400"/></td>
+<td><img src="docs/images/after-toolstream.svg" alt="4 meta-tools loaded, rest on demand" width="400"/></td>
+</tr>
+</table>
+
 1. Claude Code connects to ToolStream instead of connecting to each service separately
 2. ToolStream starts with just 4 small tools: discover_servers, discover_tools, execute_tool, and reconnect_server
 3. As the conversation develops, ToolStream automatically brings in the tools that match what you're doing

@@ -12,10 +12,12 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:smoke": "vitest run test/smoke.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "benchmark": "npx tsx scripts/benchmark.ts"
   },
   "files": [
     "dist",
+    "docs/images",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

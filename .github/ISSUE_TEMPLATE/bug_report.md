@@ -5,19 +5,33 @@ labels: bug
 ---
 
 ## Environment
-- Node version:
-- OS:
-- ToolStream version:
+
+- **ToolStream version**: (e.g., 1.0.0)
+- **Node version**: (e.g., 20.11.0)
+- **OS**: (e.g., macOS 15, Ubuntu 24.04)
 
 ## What happened
 
+A clear description of the bug.
+
+## Expected behavior
+
+What you expected to happen instead.
 
 ## Steps to reproduce
+
 1.
 2.
 3.
 
-## Expected behavior
+## Relevant config
 
+```yaml
+# Paste relevant sections of your toolstream.config.yaml (redact tokens)
+```
 
 ## Logs
+
+```
+# Paste any error output or logs
+```
