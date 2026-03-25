@@ -5,6 +5,7 @@ import {
   beforeAll,
   beforeEach,
   afterEach,
+  vi,
 } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -300,5 +301,78 @@ describe("ProxyServer", () => {
       expect(entry).toHaveProperty("name");
       expect(entry).toHaveProperty("tool_count");
     }
+  });
+
+  describe("discover_tools triggers dependency resolution", () => {
+    it("resolveDependencies is called and dependency tools appear in tools/list", async () => {
+      // Register ToolRecord objects with the dependency resolver so it has data
+      // Both tools share 'path' in their required fields, triggering a match
+      const depToolRecords = [
+        {
+          id: "fs:read_file",
+          serverId: "fs",
+          toolName: "read_file",
+          description: "Read contents of a file from the filesystem",
+          inputSchema: {
+            type: "object" as const,
+            properties: { path: { type: "string" } },
+            required: ["path"],
+          },
+          isActive: true,
+        },
+        {
+          id: "fs:write_file",
+          serverId: "fs",
+          toolName: "write_file",
+          description: "Write content to a file on the filesystem",
+          inputSchema: {
+            type: "object" as const,
+            properties: {
+              path: { type: "string" },
+              content: { type: "string" },
+            },
+            required: ["path", "content"],
+          },
+          isActive: true,
+        },
+        {
+          id: "fs:list_directory",
+          serverId: "fs",
+          toolName: "list_directory",
+          description: "List files in a directory",
+          inputSchema: {
+            type: "object" as const,
+            properties: { path: { type: "string" } },
+            required: ["path"],
+          },
+          isActive: true,
+        },
+      ];
+      dependencyResolver.registerTools("fs", depToolRecords);
+
+      const spy = vi.spyOn(dependencyResolver, "resolveDependencies");
+
+      // Call discover_tools to trigger routing + dependency resolution
+      await client.callTool({
+        name: "discover_tools",
+        arguments: { query: "read a file from disk" },
+      });
+
+      // Assert resolveDependencies was called at least once
+      expect(spy).toHaveBeenCalled();
+
+      // After discover_tools, tools/list should include surfaced tools
+      const listResult = await client.listTools();
+      const names = listResult.tools.map((t) => t.name);
+
+      // Should have meta-tools plus surfaced tools
+      expect(listResult.tools.length).toBeGreaterThan(4);
+
+      // At least one surfaced tool should be namespaced as fs_<toolname>
+      const surfaced = names.filter((n) => n.startsWith("fs_"));
+      expect(surfaced.length).toBeGreaterThan(0);
+
+      spy.mockRestore();
+    }, 30_000);
   });
 });
