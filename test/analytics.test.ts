@@ -194,6 +194,29 @@ describe("Usage Analytics (7a)", () => {
     });
   });
 
+  describe("concurrent writes", () => {
+    it("concurrent writes to tool_call_events do not error", async () => {
+      // Fire off many parallel inserts and confirm none throw
+      const writes = Array.from({ length: 20 }, (_, i) =>
+        Promise.resolve(db.recordToolCall(`tool:${i}`, `session-concurrent`, i))
+      );
+      await expect(Promise.all(writes)).resolves.not.toThrow();
+
+      const rows = db.raw
+        .prepare("SELECT COUNT(*) as cnt FROM tool_call_events")
+        .get() as any;
+      expect(rows.cnt).toBe(20);
+    });
+  });
+
+  describe("empty co-occurrence table", () => {
+    it("returns empty array from getCooccurring when table is empty", () => {
+      // No inserts, table is empty
+      const result = db.getCooccurring("any:tool", 10);
+      expect(result).toEqual([]);
+    });
+  });
+
   describe("getSessionToolCalls", () => {
     it("returns distinct tools called in a session", () => {
       db.recordToolCall("fs:read", "s1", 1);

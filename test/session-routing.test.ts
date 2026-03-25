@@ -120,4 +120,62 @@ describe("Session-Level Multi-Turn Routing (7c)", () => {
     const ctx = sm.getSessionContext("nonexistent");
     expect(ctx).toBeNull();
   });
+
+  it("topic bias decays: adding many non-dominant calls lowers dominant server count ratio", () => {
+    const session = sm.createSession();
+
+    // Establish jira dominance (6 calls, interleaved to avoid reset)
+    for (let i = 0; i < 3; i++) {
+      sm.recordServerCall(session.id, "jira");
+      sm.recordServerCall(session.id, "jira");
+    }
+
+    const ctxBefore = sm.getSessionContext(session.id);
+    expect(ctxBefore).not.toBeNull();
+    const confidenceBefore = ctxBefore!.confidence;
+
+    // Add 2 non-dominant calls (not 3 consecutive to avoid reset)
+    sm.recordServerCall(session.id, "github");
+    sm.recordServerCall(session.id, "jira"); // break the consecutive streak
+    sm.recordServerCall(session.id, "github");
+    sm.recordServerCall(session.id, "jira"); // break again
+
+    const ctxAfter = sm.getSessionContext(session.id);
+    expect(ctxAfter).not.toBeNull();
+    expect(ctxAfter!.dominantServerId).toBe("jira");
+    // Confidence should be lower now that there are more total calls
+    expect(ctxAfter!.confidence).toBeLessThan(confidenceBefore);
+  });
+
+  it("server switching mid-session: after reset, new server becomes dominant", () => {
+    const session = sm.createSession();
+
+    // Build jira dominance
+    sm.recordServerCall(session.id, "jira");
+    sm.recordServerCall(session.id, "jira");
+    sm.recordServerCall(session.id, "jira");
+    sm.recordServerCall(session.id, "jira");
+
+    // Verify jira is dominant before switch
+    const ctxBefore = sm.getSessionContext(session.id);
+    expect(ctxBefore!.dominantServerId).toBe("jira");
+
+    // 3 consecutive github calls trigger a reset
+    sm.recordServerCall(session.id, "github");
+    sm.recordServerCall(session.id, "github");
+    sm.recordServerCall(session.id, "github");
+
+    // After reset: only github:1 remains, not enough for context
+    const ctxAfterReset = sm.getSessionContext(session.id);
+    expect(ctxAfterReset).toBeNull();
+
+    // Now build github dominance
+    sm.recordServerCall(session.id, "github");
+    sm.recordServerCall(session.id, "github");
+
+    // Now github is dominant (3 total calls from the reset survivor + 2 new = 3)
+    const ctxFinal = sm.getSessionContext(session.id);
+    expect(ctxFinal).not.toBeNull();
+    expect(ctxFinal!.dominantServerId).toBe("github");
+  });
 });
