@@ -12,6 +12,8 @@ Usage:
   toolstream add-server              Add a server to an existing config
   toolstream health                  Check server health from the database
   toolstream doctor [config]         Validate Toolstream setup
+  toolstream stats [--limit N] [--json] [--db path]
+                                     Show usage analytics
   toolstream --help                  Show this help
 
 Options:
@@ -25,6 +27,9 @@ async function main(): Promise<void> {
     options: {
       ui: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
+      limit: { type: "string" },
+      json: { type: "boolean", default: false },
+      db: { type: "string" },
     },
     strict: false,
   });
@@ -75,6 +80,16 @@ async function main(): Promise<void> {
       const { runDoctor } = await import("./cli/doctor.js");
       const configFile = positionals[1] || "toolstream.config.yaml";
       await runDoctor(configFile);
+      break;
+    }
+
+    case "stats": {
+      const { statsCommand } = await import("./cli/stats.js");
+      await statsCommand({
+        limit: (values as any).limit ? Number((values as any).limit) : 10,
+        json: !!(values as any).json,
+        dbPath: (values as any).db || "./toolstream.db",
+      });
       break;
     }
 

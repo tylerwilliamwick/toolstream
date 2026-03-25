@@ -73,6 +73,12 @@ export async function startCommand(
     `[ToolStream] ${healthy}/${status.length} servers connected, ${registry.indexSize} tools indexed`
   );
 
+  // Prune old analytics events (30-day TTL)
+  const pruned = db.pruneOldEvents(30);
+  if (pruned > 0) {
+    console.error(`[ToolStream] Pruned ${pruned} analytics events older than 30 days`);
+  }
+
   // Start proxy server
   const proxy = new ProxyServer(
     config,
@@ -80,7 +86,8 @@ export async function startCommand(
     router,
     registry,
     upstreamManager,
-    dependencyResolver
+    dependencyResolver,
+    db
   );
 
   // Start UI server if requested

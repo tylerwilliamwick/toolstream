@@ -5,7 +5,7 @@ import { existsSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const MIGRATIONS: Record<number, string[]> = {
   1: [`
@@ -64,6 +64,24 @@ const MIGRATIONS: Record<number, string[]> = {
   2: [
     `ALTER TABLE servers ADD COLUMN last_ping_ms INTEGER`,
     `ALTER TABLE servers ADD COLUMN last_ping_at TEXT`,
+  ],
+  3: [
+    `CREATE TABLE IF NOT EXISTS tool_call_events (
+      tool_id            TEXT NOT NULL,
+      session_id         TEXT NOT NULL,
+      timestamp          INTEGER NOT NULL,
+      sequence_position  INTEGER NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_tool_call_events_tool ON tool_call_events(tool_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tool_call_events_session ON tool_call_events(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tool_call_events_ts ON tool_call_events(timestamp)`,
+    `CREATE TABLE IF NOT EXISTS tool_cooccurrence (
+      tool_a_id    TEXT NOT NULL,
+      tool_b_id    TEXT NOT NULL,
+      count        INTEGER NOT NULL DEFAULT 0,
+      last_seen_at INTEGER NOT NULL,
+      PRIMARY KEY (tool_a_id, tool_b_id)
+    )`,
   ],
 };
 
@@ -320,6 +338,78 @@ export class ToolStreamDatabase {
   ): Array<{ tool_id: string; score: number; source: string }> {
     return this.db
       .prepare("SELECT tool_id, score, source FROM tool_cache WHERE session_id = ?")
+      .all(sessionId) as any[];
+  }
+
+  // --- Analytics operations ---
+
+  recordToolCall(toolId: string, sessionId: string, sequencePos: number): void {
+    this.db
+      .prepare(
+        `INSERT INTO tool_call_events (tool_id, session_id, timestamp, sequence_position)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run(toolId, sessionId, Date.now(), sequencePos);
+  }
+
+  incrementCooccurrence(toolAId: string, toolBId: string): void {
+    const now = Date.now();
+    // Normalize order so (A,B) and (B,A) are the same pair
+    const [first, second] = toolAId < toolBId ? [toolAId, toolBId] : [toolBId, toolAId];
+    this.db
+      .prepare(
+        `INSERT INTO tool_cooccurrence (tool_a_id, tool_b_id, count, last_seen_at)
+         VALUES (?, ?, 1, ?)
+         ON CONFLICT(tool_a_id, tool_b_id)
+         DO UPDATE SET count = count + 1, last_seen_at = ?`
+      )
+      .run(first, second, now, now);
+  }
+
+  getTopTools(limit: number): Array<{ tool_id: string; call_count: number }> {
+    return this.db
+      .prepare(
+        `SELECT tool_id, COUNT(*) as call_count
+         FROM tool_call_events
+         GROUP BY tool_id
+         ORDER BY call_count DESC
+         LIMIT ?`
+      )
+      .all(limit) as any[];
+  }
+
+  getCooccurring(
+    toolId: string,
+    limit: number
+  ): Array<{ tool_id: string; count: number }> {
+    return this.db
+      .prepare(
+        `SELECT
+           CASE WHEN tool_a_id = ? THEN tool_b_id ELSE tool_a_id END as tool_id,
+           count
+         FROM tool_cooccurrence
+         WHERE tool_a_id = ? OR tool_b_id = ?
+         ORDER BY count DESC
+         LIMIT ?`
+      )
+      .all(toolId, toolId, toolId, limit) as any[];
+  }
+
+  clearEmbeddings(): void {
+    this.db.exec("DELETE FROM embeddings");
+  }
+
+  pruneOldEvents(ttlDays: number): number {
+    const cutoff = Date.now() - ttlDays * 24 * 60 * 60 * 1000;
+    const result = this.db
+      .prepare("DELETE FROM tool_call_events WHERE timestamp < ?")
+      .run(cutoff);
+    return result.changes;
+  }
+
+  getSessionToolCalls(sessionId: string): Array<{ tool_id: string }> {
+    return this.db
+      .prepare("SELECT DISTINCT tool_id FROM tool_call_events WHERE session_id = ?")
       .all(sessionId) as any[];
   }
 
