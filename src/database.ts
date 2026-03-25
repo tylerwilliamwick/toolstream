@@ -378,6 +378,19 @@ export class ToolStreamDatabase {
       .all(limit) as any[];
   }
 
+  getTopCooccurrence(
+    limit: number
+  ): Array<{ tool_a_id: string; tool_b_id: string; count: number }> {
+    return this.db
+      .prepare(
+        `SELECT tool_a_id, tool_b_id, count
+         FROM tool_cooccurrence
+         ORDER BY count DESC
+         LIMIT ?`
+      )
+      .all(limit) as any[];
+  }
+
   getCooccurring(
     toolId: string,
     limit: number
