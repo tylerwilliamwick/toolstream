@@ -112,6 +112,9 @@ export function loadConfig(configPath: string): ToolStreamConfig {
       topK: topK,
       confidenceThreshold: threshold,
       contextWindowTurns: Number(ts.routing.context_window_turns) || 3,
+      popularityPreloadCount: ts.routing.popularity_preload_count != null
+        ? Number(ts.routing.popularity_preload_count)
+        : 3,
     },
     storage: {
       provider: ts.storage.provider === "pgvector" ? "pgvector" : "sqlite",

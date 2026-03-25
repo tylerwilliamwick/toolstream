@@ -15,6 +15,8 @@ export interface SessionState {
   contextBuffer: string[];
   createdAt: number;
   lastActiveAt: number;
+  serverCallCounts: Map<string, number>;
+  consecutiveNonDominantCalls: number;
 }
 
 export interface RouteResult {
@@ -59,6 +61,7 @@ export interface ToolStreamConfig {
     topK: number;
     confidenceThreshold: number;
     contextWindowTurns: number;
+    popularityPreloadCount?: number;
   };
   storage: {
     provider: "sqlite" | "pgvector";
@@ -78,6 +81,11 @@ export interface ToolStreamConfig {
       throttleSeconds: number;
     };
   };
+}
+
+export interface SessionTopicContext {
+  dominantServerId: string;
+  confidence: number;
 }
 
 export interface ServerRecord {
