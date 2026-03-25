@@ -118,7 +118,7 @@ For stdio transport only. `command` is the executable to run, `args` is the list
 For http transport only. The base URL of the running server.
 
 **`auth`**
-Authentication for this server. See [Auth Guide](auth-guide.md) for full details. Common options:
+Authentication for this server. See [Auth Guide](../configuration/auth-guide.md) for full details. Common options:
 - `type: "none"` for servers that don't require auth
 - `type: "bearer"` with `token_env` set to an environment variable name for token-based auth
 - `type: "env"` for servers that read credentials from environment variables directly
@@ -154,4 +154,4 @@ servers:
       type: "none"
 ```
 
-Then restart ToolStream. See [Configuration Examples](examples.md) for common multi-server setups.
+Then restart ToolStream. See [Configuration Examples](../configuration/examples.md) for common multi-server setups.
