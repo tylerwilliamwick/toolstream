@@ -13,6 +13,7 @@ import type { SemanticRouter } from "./semantic-router.js";
 import type { ToolRegistry } from "./tool-registry.js";
 import type { UpstreamManager } from "./upstream-manager.js";
 import type { DependencyResolver } from "./dependency-resolver.js";
+import type { ToolStreamDatabase } from "./database.js";
 import { isMetaTool } from "./meta-tools.js";
 import { logger } from "./logger.js";
 
@@ -23,8 +24,10 @@ export class ProxyServer {
   private registry: ToolRegistry;
   private upstreamManager: UpstreamManager;
   private dependencyResolver: DependencyResolver;
+  private db: ToolStreamDatabase | null;
   private config: ToolStreamConfig;
   private currentSessionId: string | null = null;
+  private sessionCallSequence: Map<string, number> = new Map();
 
   constructor(
     config: ToolStreamConfig,
@@ -32,7 +35,8 @@ export class ProxyServer {
     semanticRouter: SemanticRouter,
     registry: ToolRegistry,
     upstreamManager: UpstreamManager,
-    dependencyResolver: DependencyResolver
+    dependencyResolver: DependencyResolver,
+    db?: ToolStreamDatabase
   ) {
     this.config = config;
     this.sessionManager = sessionManager;
@@ -40,6 +44,7 @@ export class ProxyServer {
     this.registry = registry;
     this.upstreamManager = upstreamManager;
     this.dependencyResolver = dependencyResolver;
+    this.db = db ?? null;
 
     this.server = new Server(
       {
@@ -106,6 +111,7 @@ export class ProxyServer {
             resolved.originalName,
             (args || {}) as Record<string, unknown>
           );
+          this.recordAnalytics(`${resolved.serverId}:${resolved.originalName}`);
           return result;
         } catch (err) {
           return {
@@ -284,6 +290,7 @@ export class ProxyServer {
             tool,
             toolArgs
           );
+          this.recordAnalytics(`${server}:${tool}`);
           return result;
         } catch (err) {
           return {
@@ -336,6 +343,31 @@ export class ProxyServer {
       });
     } catch {
       // Notification failures are non-fatal
+    }
+  }
+
+  private recordAnalytics(toolId: string): void {
+    if (!this.db || !this.currentSessionId) return;
+    try {
+      const sessionId = this.currentSessionId;
+      const seq = (this.sessionCallSequence.get(sessionId) ?? 0) + 1;
+      this.sessionCallSequence.set(sessionId, seq);
+
+      this.db.recordToolCall(toolId, sessionId, seq);
+
+      // Fire-and-forget co-occurrence: pair with all other tools called in this session
+      const others = this.db.getSessionToolCalls(sessionId);
+      for (const other of others) {
+        if (other.tool_id !== toolId) {
+          try {
+            this.db.incrementCooccurrence(toolId, other.tool_id);
+          } catch (err) {
+            logger.error(`[ProxyServer] Co-occurrence write failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      }
+    } catch (err) {
+      logger.error(`[ProxyServer] Analytics recording failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
