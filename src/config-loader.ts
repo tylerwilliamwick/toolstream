@@ -183,6 +183,22 @@ function parseServerConfig(raw: any, index: number): ServerConfig {
 
   const auth = parseAuthConfig(raw.auth || { type: "none" }, `${prefix}.auth`);
 
+  // Per-server routing overrides
+  let serverRouting: ServerConfig["routing"];
+  if (raw.routing) {
+    const serverTopK = raw.routing.top_k;
+    if (serverTopK != null) {
+      const k = Number(serverTopK);
+      if (!Number.isInteger(k) || k < 1 || k > 20) {
+        throw new ConfigValidationError(
+          `${prefix}.routing.top_k`,
+          `Must be an integer between 1 and 20, got '${serverTopK}'`
+        );
+      }
+      serverRouting = { topK: k };
+    }
+  }
+
   return {
     id: String(raw.id),
     name: String(raw.name),
@@ -192,6 +208,7 @@ function parseServerConfig(raw: any, index: number): ServerConfig {
     url: raw.url ? String(raw.url) : undefined,
     auth,
     envPassthrough: Array.isArray(raw.env_passthrough) ? raw.env_passthrough.map(String) : undefined,
+    routing: serverRouting,
   };
 }
 

@@ -39,6 +39,9 @@ export interface ServerConfig {
   url?: string;
   auth: AuthConfig;
   envPassthrough?: string[]; // Env var names to pass to child process (security: allowlist)
+  routing?: {
+    topK?: number; // Per-server override of global top_k (1-20)
+  };
 }
 
 export interface AuthConfig {
