@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="520" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">
+  <rect width="480" height="520" rx="8" fill="#1a1a2e"/>
+  <text x="20" y="30" fill="#888" font-size="11">Without ToolStream: 107 tools loaded every turn</text>
+  <line x1="20" y1="40" x2="460" y2="40" stroke="#333"/>
+  <g fill="#e0e0e0">
+    <text x="20" y="62">mcp__atlassian__jql_search</text>
+    <text x="20" y="80">mcp__atlassian__create_issue</text>
+    <text x="20" y="98">mcp__atlassian__update_issue</text>
+    <text x="20" y="116">mcp__atlassian__get_issue</text>
+    <text x="20" y="134">mcp__atlassian__list_projects</text>
+    <text x="20" y="152">mcp__atlassian__get_transitions</text>
+    <text x="20" y="170">mcp__atlassian__transition_issue</text>
+    <text x="20" y="188">mcp__atlassian__add_comment</text>
+    <text x="20" y="206">mcp__atlassian__search_confluence</text>
+    <text x="20" y="224">mcp__atlassian__get_page</text>
+    <text x="20" y="242">mcp__atlassian__create_page</text>
+    <text x="20" y="260">mcp__github__create_issue</text>
+    <text x="20" y="278">mcp__github__search_repos</text>
+    <text x="20" y="296">mcp__github__create_pr</text>
+    <text x="20" y="314">mcp__github__list_commits</text>
+    <text x="20" y="332">mcp__github__get_file_contents</text>
+    <text x="20" y="350">mcp__obsidian__search_notes</text>
+    <text x="20" y="368">mcp__obsidian__read_note</text>
+    <text x="20" y="386">mcp__obsidian__write_note</text>
+  </g>
+  <text x="20" y="420" fill="#666" font-size="11">... and 88 more tools</text>
+  <rect x="20" y="440" width="440" height="24" rx="4" fill="#3d1f1f"/>
+  <text x="30" y="456" fill="#ff6b6b" font-size="11">~23,700 tokens per turn just for tool definitions</text>
+  <rect x="20" y="475" width="440" height="24" rx="4" fill="#3d1f1f"/>
+  <text x="30" y="491" fill="#ff6b6b" font-size="11">~$7.00 wasted per 20-turn conversation (Opus pricing)</text>
+</svg>
