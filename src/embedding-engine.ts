@@ -1,36 +1,77 @@
-// src/embedding-engine.ts - Local ONNX embedding inference
+// src/embedding-engine.ts - Embedding inference (local ONNX + OpenAI)
 
-const VECTOR_DIM = 384;
+const LOCAL_VECTOR_DIM = 384;
+const OPENAI_VECTOR_DIM = 1536; // text-embedding-3-small default
 
 export class EmbeddingEngine {
   private extractor: any | null = null;
   private provider: "local" | "openai";
+  private openaiApiKey: string | null = null;
+  private openaiModel: string;
+  private vectorDim: number;
+  private localFallback: boolean = false;
 
-  constructor(provider: "local" | "openai" = "local") {
+  constructor(
+    provider: "local" | "openai" = "local",
+    openaiApiKey?: string,
+    openaiModel: string = "text-embedding-3-small"
+  ) {
     this.provider = provider;
+    this.openaiApiKey = openaiApiKey ?? process.env.OPENAI_API_KEY ?? null;
+    this.openaiModel = openaiModel;
+    this.vectorDim = provider === "openai" ? OPENAI_VECTOR_DIM : LOCAL_VECTOR_DIM;
   }
 
   async initialize(): Promise<void> {
-    if (this.provider === "local") {
-      // Dynamic import to avoid issues when module is not available
-      const { pipeline } = await import("@xenova/transformers");
-      try {
-        this.extractor = await pipeline(
-          "feature-extraction",
-          "Xenova/all-MiniLM-L6-v2",
-          { revision: "main" }
-        );
-      } catch (err) {
-        throw new Error(
-          `Failed to initialize embedding model 'all-MiniLM-L6-v2'. ` +
-          `If this is your first run, ensure you have an internet connection for the initial model download (~90MB). ` +
-          `Original error: ${err instanceof Error ? err.message : String(err)}`
-        );
+    if (this.provider === "openai" && !this.openaiApiKey) {
+      console.warn("[EmbeddingEngine] OpenAI API key missing, falling back to local ONNX");
+      this.provider = "local";
+      this.vectorDim = LOCAL_VECTOR_DIM;
+    }
+
+    if (this.provider === "local" || this.localFallback) {
+      await this.initializeLocal();
+    }
+  }
+
+  private async initializeLocal(): Promise<void> {
+    const { pipeline } = await import("@xenova/transformers");
+    try {
+      this.extractor = await pipeline(
+        "feature-extraction",
+        "Xenova/all-MiniLM-L6-v2",
+        { revision: "main" }
+      );
+      if (this.provider !== "openai") {
+        this.vectorDim = LOCAL_VECTOR_DIM;
       }
+    } catch (err) {
+      throw new Error(
+        `Failed to initialize embedding model 'all-MiniLM-L6-v2'. ` +
+        `If this is your first run, ensure you have an internet connection for the initial model download (~90MB). ` +
+        `Original error: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
   async embed(text: string): Promise<Float32Array> {
+    if (this.provider === "openai") {
+      try {
+        return await this.embedOpenAI(text);
+      } catch (err) {
+        console.warn(`[EmbeddingEngine] OpenAI embed failed, falling back to local: ${err instanceof Error ? err.message : String(err)}`);
+        if (!this.extractor) {
+          await this.initializeLocal();
+          this.vectorDim = LOCAL_VECTOR_DIM;
+        }
+        return await this.embedLocal(text);
+      }
+    }
+
+    return await this.embedLocal(text);
+  }
+
+  private async embedLocal(text: string): Promise<Float32Array> {
     if (!this.extractor) {
       throw new Error("EmbeddingEngine not initialized. Call initialize() first.");
     }
@@ -49,7 +90,48 @@ export class EmbeddingEngine {
     return vector;
   }
 
+  private async embedOpenAI(text: string): Promise<Float32Array> {
+    const response = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.openaiModel,
+        input: text,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json() as {
+      data: Array<{ embedding: number[] }>;
+    };
+
+    return new Float32Array(data.data[0].embedding);
+  }
+
   async embedBatch(texts: string[]): Promise<Float32Array[]> {
+    if (this.provider === "openai") {
+      try {
+        return await this.embedBatchOpenAI(texts);
+      } catch (err) {
+        console.warn(`[EmbeddingEngine] OpenAI batch embed failed, falling back to local: ${err instanceof Error ? err.message : String(err)}`);
+        if (!this.extractor) {
+          await this.initializeLocal();
+          this.vectorDim = LOCAL_VECTOR_DIM;
+        }
+        return await this.embedBatchLocal(texts);
+      }
+    }
+
+    return await this.embedBatchLocal(texts);
+  }
+
+  private async embedBatchLocal(texts: string[]): Promise<Float32Array[]> {
     if (!this.extractor) {
       throw new Error("EmbeddingEngine not initialized. Call initialize() first.");
     }
@@ -61,25 +143,62 @@ export class EmbeddingEngine {
     });
 
     const results: Float32Array[] = [];
+    const dim = LOCAL_VECTOR_DIM;
     for (let i = 0; i < texts.length; i++) {
       results.push(
-        new Float32Array(
-          output.data.slice(i * VECTOR_DIM, (i + 1) * VECTOR_DIM)
-        )
+        new Float32Array(output.data.slice(i * dim, (i + 1) * dim))
       );
     }
     return results;
   }
 
+  private async embedBatchOpenAI(texts: string[]): Promise<Float32Array[]> {
+    const response = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.openaiModel,
+        input: texts,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json() as {
+      data: Array<{ embedding: number[]; index: number }>;
+    };
+
+    // Sort by index to maintain order
+    const sorted = data.data.sort((a, b) => a.index - b.index);
+    return sorted.map((d) => new Float32Array(d.embedding));
+  }
+
   cosineSimilarity(a: Float32Array, b: Float32Array): number {
+    const len = Math.min(a.length, b.length);
     let dot = 0;
-    for (let i = 0; i < a.length; i++) {
+    for (let i = 0; i < len; i++) {
       dot += a[i] * b[i];
     }
     return dot; // vectors are L2-normalized, so dot product = cosine similarity
   }
 
   get vectorDimensions(): number {
-    return VECTOR_DIM;
+    return this.vectorDim;
+  }
+
+  get modelId(): string {
+    if (this.provider === "openai") {
+      return `openai:${this.openaiModel}`;
+    }
+    return "local:all-MiniLM-L6-v2";
+  }
+
+  get activeProvider(): "local" | "openai" {
+    return this.provider;
   }
 }

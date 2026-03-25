@@ -117,11 +117,17 @@ export class ToolRegistry {
     );
   }
 
+  clearVectorIndex(): void {
+    this.vectorIndex.clear();
+  }
+
   async topKByVector(queryVector: Float32Array, k: number): Promise<ScoredTool[]> {
     await this.writeLock; // Wait for any pending write to finish
     const scores: Array<{ toolId: string; score: number }> = [];
 
     for (const [toolId, vector] of this.vectorIndex) {
+      // Dimension guard: skip vectors with mismatched dimensions
+      if (vector.length !== queryVector.length) continue;
       const score = this.embedEngine.cosineSimilarity(queryVector, vector);
       scores.push({ toolId, score });
     }
