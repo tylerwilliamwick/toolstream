@@ -1,5 +1,10 @@
 # toolstream.config.example.yaml
 #
+# COPY this file to toolstream.config.yaml for your personal configuration.
+# toolstream.config.yaml is .gitignored and will never be committed.
+# Never put real vault paths, API tokens, or service URLs in this file.
+# Use toolstream.config.yaml (your local copy) for all personal values.
+#
 # Copy this file and customize it for your setup:
 #   cp toolstream.config.example.yaml toolstream.config.yaml
 #

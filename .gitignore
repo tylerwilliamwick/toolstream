@@ -6,3 +6,7 @@ dist/
 .omc/
 .env
 *.local.yaml
+toolstream.config.yaml
+toolstream.config.local.yaml
+.claude/
+*.local.json

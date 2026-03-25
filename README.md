@@ -60,6 +60,17 @@ cp toolstream.config.example.yaml toolstream.config.yaml
 node dist/index.js start toolstream.config.yaml
 ```
 
+## Configuration Privacy
+
+ToolStream separates public configuration from personal configuration:
+
+- `toolstream.config.example.yaml`: copy this to get started; committed to source control
+- `toolstream.config.yaml`: your live config with vault paths and service URLs; never committed (blocked by .gitignore)
+
+Your Obsidian vault, Jira instance, and other service credentials live only in your local config and environment variables. They never leave your machine. Anyone who forks or clones this repo gets a clean slate with no personal data.
+
+Note: ToolStream runs locally. When the proxy is active, it can call tools on your configured services, but only from your machine. No vault contents or credentials are transmitted to the repo or any remote service.
+
 ## Configuration
 
 ToolStream uses a YAML config file. Copy `toolstream.config.example.yaml` to get started.
