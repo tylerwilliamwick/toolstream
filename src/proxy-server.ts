@@ -112,6 +112,7 @@ export class ProxyServer {
             (args || {}) as Record<string, unknown>
           );
           this.recordAnalytics(`${resolved.serverId}:${resolved.originalName}`);
+          this.sessionManager.recordServerCall(this.currentSessionId, resolved.serverId);
           return result;
         } catch (err) {
           return {
@@ -291,6 +292,7 @@ export class ProxyServer {
             toolArgs
           );
           this.recordAnalytics(`${server}:${tool}`);
+          this.sessionManager.recordServerCall(this.currentSessionId!, server);
           return result;
         } catch (err) {
           return {
@@ -377,8 +379,10 @@ export class ProxyServer {
 
       this.sessionManager.updateContext(this.currentSessionId, contextText);
 
+      const sessionContext = this.sessionManager.getSessionContext(this.currentSessionId);
       const result = await this.semanticRouter.route(
-        this.sessionManager.getSession(this.currentSessionId)?.contextBuffer || []
+        this.sessionManager.getSession(this.currentSessionId)?.contextBuffer || [],
+        sessionContext
       );
 
       if (!result.belowThreshold && result.candidates.length > 0) {

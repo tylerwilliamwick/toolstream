@@ -45,7 +45,14 @@ export async function startCommand(
   await registry.loadIndex();
 
   const router = new SemanticRouter(embedEngine, registry, config.routing);
-  const sessionManager = new SessionManager(db);
+  const sessionManager = new SessionManager(
+    db,
+    undefined,
+    undefined,
+    db,
+    registry,
+    config.routing.popularityPreloadCount ?? 3
+  );
   sessionManager.startCleanup();
 
   const upstreamManager = new UpstreamManager(registry);

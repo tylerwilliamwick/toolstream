@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ToolStreamDatabase } from "./database.js";
-import type { SessionState, ToolRecord, ScoredTool } from "./types.js";
+import type { SessionState, ToolRecord, ScoredTool, SessionTopicContext } from "./types.js";
 import { META_TOOL_SCHEMAS } from "./meta-tools.js";
 import { logger } from "./logger.js";
 
@@ -11,6 +11,9 @@ const DEFAULT_SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 export class SessionManager {
   private sessions: Map<string, SessionState> = new Map();
   private db: ToolStreamDatabase;
+  private analyticsStore: ToolStreamDatabase | null;
+  private registry: { getToolById(id: string): ToolRecord | null | undefined } | null;
+  private popularityPreloadCount: number;
   private sessionTimeoutMs: number;
   private maxContextBuffer: number;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
@@ -18,9 +21,15 @@ export class SessionManager {
   constructor(
     db: ToolStreamDatabase,
     sessionTimeoutMs: number = DEFAULT_SESSION_TIMEOUT_MS,
-    maxContextBuffer: number = 6
+    maxContextBuffer: number = 6,
+    analyticsStore?: ToolStreamDatabase,
+    registry?: { getToolById(id: string): ToolRecord | null | undefined },
+    popularityPreloadCount: number = 3
   ) {
     this.db = db;
+    this.analyticsStore = analyticsStore ?? null;
+    this.registry = registry ?? null;
+    this.popularityPreloadCount = popularityPreloadCount;
     this.sessionTimeoutMs = sessionTimeoutMs;
     this.maxContextBuffer = maxContextBuffer;
   }
@@ -47,9 +56,35 @@ export class SessionManager {
       contextBuffer: [],
       createdAt: now,
       lastActiveAt: now,
+      serverCallCounts: new Map(),
+      consecutiveNonDominantCalls: 0,
     };
     this.sessions.set(id, session);
     this.db.insertSession(id, clientInfo);
+
+    // Pre-load popular tools from analytics
+    if (this.analyticsStore && this.registry && this.popularityPreloadCount > 0) {
+      try {
+        const topTools = this.analyticsStore.getTopTools(this.popularityPreloadCount);
+        for (const entry of topTools) {
+          const tool = this.registry.getToolById(entry.tool_id);
+          if (!tool) continue; // tool may have been removed
+          if (!tool.isActive) continue; // skip inactive tools
+          session.activeSurface.set(tool.id, tool);
+          try {
+            this.db.insertToolCache(id, tool.id, 1.0, "startup");
+          } catch {
+            // FK constraint; in-memory surface is authoritative
+          }
+        }
+        if (topTools.length > 0) {
+          logger.info(`[SessionManager] Pre-loaded ${session.activeSurface.size} popular tools`);
+        }
+      } catch (err) {
+        logger.error(`[SessionManager] Popularity pre-load failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     return session;
   }
 
@@ -159,6 +194,60 @@ export class SessionManager {
       }
     }
     return null;
+  }
+
+  recordServerCall(sessionId: string, serverId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+
+    const currentCount = session.serverCallCounts.get(serverId) ?? 0;
+    session.serverCallCounts.set(serverId, currentCount + 1);
+
+    // Track consecutive non-dominant calls for reset detection
+    const dominant = this.getDominantServer(session);
+    if (dominant && serverId !== dominant) {
+      session.consecutiveNonDominantCalls++;
+      if (session.consecutiveNonDominantCalls >= 3) {
+        // Reset: topic has shifted
+        session.serverCallCounts.clear();
+        session.consecutiveNonDominantCalls = 0;
+        session.serverCallCounts.set(serverId, 1);
+      }
+    } else {
+      session.consecutiveNonDominantCalls = 0;
+    }
+  }
+
+  getSessionContext(sessionId: string): SessionTopicContext | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+
+    let totalCalls = 0;
+    for (const count of session.serverCallCounts.values()) {
+      totalCalls += count;
+    }
+
+    if (totalCalls < 3) return null; // not enough data
+
+    const dominant = this.getDominantServer(session);
+    if (!dominant) return null;
+
+    const dominantCount = session.serverCallCounts.get(dominant) ?? 0;
+    const confidence = dominantCount / totalCalls;
+
+    return { dominantServerId: dominant, confidence };
+  }
+
+  private getDominantServer(session: SessionState): string | null {
+    let maxCount = 0;
+    let dominant: string | null = null;
+    for (const [serverId, count] of session.serverCallCounts) {
+      if (count > maxCount) {
+        maxCount = count;
+        dominant = serverId;
+      }
+    }
+    return dominant;
   }
 
   private expireSessions(): void {

@@ -2,7 +2,7 @@
 
 import type { EmbeddingEngine } from "./embedding-engine.js";
 import type { ToolRegistry } from "./tool-registry.js";
-import type { RouteResult, ToolStreamConfig } from "./types.js";
+import type { RouteResult, SessionTopicContext, ToolStreamConfig } from "./types.js";
 
 export class SemanticRouter {
   private embedEngine: EmbeddingEngine;
@@ -23,7 +23,10 @@ export class SemanticRouter {
     this.contextWindowTurns = routingConfig.contextWindowTurns;
   }
 
-  async route(contextBuffer: string[]): Promise<RouteResult> {
+  async route(
+    contextBuffer: string[],
+    sessionContext?: SessionTopicContext | null
+  ): Promise<RouteResult> {
     const window = contextBuffer.slice(-this.contextWindowTurns);
     const queryText = window.join("\n").trim();
     if (!queryText) {
@@ -31,7 +34,20 @@ export class SemanticRouter {
     }
 
     const queryVector = await this.embedEngine.embed(queryText);
-    const candidates = await this.registry.topKByVector(queryVector, this.topK);
+    let candidates = await this.registry.topKByVector(queryVector, this.topK);
+
+    // Apply session topic bias
+    if (sessionContext && sessionContext.confidence > 0.5) {
+      candidates = candidates.map((c) => {
+        if (c.tool.serverId === sessionContext.dominantServerId) {
+          return { ...c, score: c.score * 1.3 };
+        }
+        return c;
+      });
+      // Re-sort after bias
+      candidates.sort((a, b) => b.score - a.score);
+    }
+
     const passing = candidates.filter((c) => c.score >= this.threshold);
 
     return {
