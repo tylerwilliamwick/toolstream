@@ -150,6 +150,17 @@ These 4 tools are always visible to the LLM:
 | `execute_tool` | Call any tool on any server directly by name |
 | `reconnect_server` | Force-reconnect a server that has gone offline |
 
+## v2.0 Features
+
+- **Usage analytics**: ToolStream tracks which tools you call and how often. Run `toolstream stats` to see a breakdown by server, tool, and time period.
+- **Session-aware routing**: Tools you've used in the current session get a ranking boost. Frequently used tools pre-load at session start without needing a semantic search.
+- **OpenAI embedding support**: Switch from local ONNX inference to OpenAI's embedding API by setting `embedding.provider: "openai"`. Useful if local inference is slow on your hardware.
+- **Per-server top_k**: Set `routing.top_k` on an individual server to override the global limit for that server's tools. Useful when one server has many more tools than the others.
+
+See the [docs](docs/index.md) for full configuration details.
+
+---
+
 ## Architecture
 
 - **Runtime**: Node.js 20+ with TypeScript

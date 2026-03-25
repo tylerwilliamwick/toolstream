@@ -48,6 +48,14 @@ Surfaced tools get appended to the meta-tools list for that turn. The LLM sees t
 
 You control how many tools get surfaced per turn (`top_k`), the minimum similarity score required (`confidence_threshold`), and how many conversation turns to consider (`context_window_turns`). See [Configuration Reference](../configuration/reference.md).
 
+### Step 3b: Session-aware routing
+
+Semantic similarity is the primary routing signal, but ToolStream also tracks which tools you actually call during a session. Tools you've used recently get a small boost in ranking, so tools that have been useful in this conversation are more likely to reappear without needing a new search.
+
+At session start, ToolStream checks usage history across past sessions. Frequently used tools get pre-loaded into the initial context so they're available from the first turn without waiting for a semantic match.
+
+See [Concepts: Session Routing](session-routing.md) for details on how session state is tracked and how the popularity signal is weighted.
+
 ### Step 4: Fallback discovery
 
 If ToolStream's automatic routing misses something, the LLM has explicit escape hatches:
@@ -65,7 +73,7 @@ At startup, ToolStream takes every tool's name and description and converts it i
 
 When a new conversation turn arrives, ToolStream does the same thing to the recent conversation text. Then it measures how similar the conversation vector is to each tool vector. The most similar tools get surfaced.
 
-This all runs locally using the `all-MiniLM-L6-v2` model. No external API calls, no per-embedding cost.
+By default this runs locally using the `all-MiniLM-L6-v2` model. No external API calls, no per-embedding cost. If local inference is too slow on your hardware, you can switch to OpenAI's embedding API; see [Configuration: Embedding Providers](../configuration/embedding-providers.md).
 
 ---
 

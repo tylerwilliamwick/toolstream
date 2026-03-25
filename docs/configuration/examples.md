@@ -168,6 +168,99 @@ Notes on this config:
 
 ---
 
+## OpenAI embeddings
+
+Use OpenAI's embedding API instead of local inference. This trades API cost for faster startup and no local model download.
+
+Prerequisite: set the `OPENAI_API_KEY` environment variable before starting ToolStream.
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+```yaml
+toolstream:
+  transport:
+    stdio: true
+  embedding:
+    provider: "openai"
+    model: "text-embedding-3-small"
+    openai_api_key: "${OPENAI_API_KEY}"
+  routing:
+    top_k: 5
+    confidence_threshold: 0.3
+    context_window_turns: 3
+  storage:
+    provider: "sqlite"
+    sqlite_path: "./toolstream.db"
+
+servers:
+  - id: "filesystem"
+    name: "Filesystem"
+    transport: "stdio"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/yourname/Documents"]
+    auth:
+      type: "none"
+```
+
+Notes on this config:
+- `text-embedding-3-small` is OpenAI's fastest and cheapest embedding model. It works well for tool routing.
+- Embeddings are computed once at startup and cached in SQLite. You pay for embeddings when you first run or when tools change, not on every turn.
+- If you switch from `"local"` to `"openai"` (or change models), delete `toolstream.db` and restart to rebuild the index with the new model.
+
+---
+
+## Per-server top_k override
+
+When one server has many more tools than the others, you can give it a higher `top_k` so it doesn't get crowded out by the global limit. This is common with Atlassian, which exposes 72+ tools across Jira and Confluence.
+
+```yaml
+toolstream:
+  transport:
+    stdio: true
+  embedding:
+    provider: "local"
+    model: "all-MiniLM-L6-v2"
+  routing:
+    top_k: 5
+    confidence_threshold: 0.3
+    context_window_turns: 3
+  storage:
+    provider: "sqlite"
+    sqlite_path: "./toolstream.db"
+
+servers:
+  - id: "filesystem"
+    name: "Filesystem"
+    transport: "stdio"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/yourname/projects"]
+    auth:
+      type: "none"
+
+  - id: "mcp-atlassian"
+    name: "Atlassian (Jira + Confluence)"
+    transport: "stdio"
+    command: "uvx"
+    args: ["mcp-atlassian"]
+    auth:
+      type: "none"
+    env_passthrough:
+      - "JIRA_URL"
+      - "JIRA_USERNAME"
+      - "JIRA_API_TOKEN"
+      - "CONFLUENCE_URL"
+      - "CONFLUENCE_USERNAME"
+      - "CONFLUENCE_API_TOKEN"
+    routing:
+      top_k: 12
+```
+
+The global `top_k` is 5, but the Atlassian server can surface up to 12 tools per turn. The filesystem server still follows the global limit of 5. The total tools surfaced per turn across all servers is the sum of each server's effective `top_k`.
+
+---
+
 ## Using an HTTP MCP server
 
 If you're running an MCP server with its own HTTP endpoint instead of launching it as a subprocess:

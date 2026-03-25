@@ -50,6 +50,18 @@ Full reference for every field in the ToolStream config file (`toolstream.config
 
 ---
 
+## `toolstream.analytics`
+
+| Field | Type | Default | Required | Description |
+|---|---|---|---|---|
+| `analytics.enabled` | boolean | `true` | no | Whether to track tool usage. When enabled, ToolStream records which tools are called and how often. Powers `toolstream stats` output and session-aware routing. |
+| `analytics.session_decay_days` | integer | `30` | no | How many days of usage history influence session routing. Older records are still stored but carry less weight in popularity calculations. |
+
+**What goes wrong if misconfigured:**
+- Setting `analytics.enabled: false` disables `toolstream stats` output and turns off popularity pre-loading. Tools still route by semantic similarity; they just don't benefit from usage history.
+
+---
+
 ## `toolstream.storage`
 
 | Field | Type | Default | Required | Description |
@@ -79,6 +91,7 @@ Each entry in the `servers` list describes one upstream MCP server.
 | `servers[].auth.type` | `"none"`, `"env"`, `"bearer"`, or `"header"` | none | yes | Authentication method. |
 | `servers[].auth.token_env` | string | none | only if `auth.type: "bearer"` | Name of the environment variable holding the bearer token. |
 | `servers[].auth.header_name` | string | none | only if `auth.type: "header"` | Name of the HTTP header to send (e.g., `"X-API-Key"`). |
+| `servers[].routing.top_k` | integer | none | no | Per-server override for `top_k`. When set, this value replaces the global `routing.top_k` for tools on this server only. Useful when one server has many more tools than others. |
 
 **What goes wrong if misconfigured:**
 - Duplicate `id` values cause ToolStream to fail at startup with a config validation error.

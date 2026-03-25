@@ -125,6 +125,20 @@ Authentication for this server. See [Auth Guide](auth-guide.md) for full details
 
 ---
 
+## Usage analytics
+
+ToolStream tracks which tools you call automatically. No configuration is required to turn it on; it's active by default.
+
+To see a summary of your tool usage, run:
+
+```bash
+toolstream stats
+```
+
+This shows call counts by server and tool, giving you a sense of which tools are actually doing work in your conversations. See [Concepts: Usage Analytics](../concepts/analytics.md) for more on what's tracked and how to interpret the output.
+
+---
+
 ## Adding your first real server
 
 Replace the example filesystem entry with a path you actually want to give Claude access to:
