@@ -9,10 +9,13 @@ TOOLSTREAM_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # Or load from a .env file next to this script:
 #   source "$TOOLSTREAM_DIR/.env"
 
+# Ensure HOME is set (required for macOS Keychain access in LaunchAgent context)
+export HOME="${HOME:-/Users/tylerwick}"
+
 # GitHub token from macOS Keychain (fallback to env)
 if [ -z "$GITHUB_PERSONAL_ACCESS_TOKEN" ]; then
   GITHUB_PERSONAL_ACCESS_TOKEN="$(security find-generic-password -s github-pat -w 2>/dev/null || echo '')"
   export GITHUB_PERSONAL_ACCESS_TOKEN
 fi
 
-exec node "$TOOLSTREAM_DIR/dist/index.js" start "$TOOLSTREAM_DIR/toolstream.config.yaml"
+exec node "$TOOLSTREAM_DIR/dist/index.js" start "$TOOLSTREAM_DIR/toolstream.config.local.yaml"
