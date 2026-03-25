@@ -20,7 +20,7 @@ export async function statsCommand(options: StatsOptions): Promise<void> {
 
   try {
     const topTools = db.getTopTools(options.limit);
-    const topCooccurrence = getTopCooccurrence(db, options.limit);
+    const topCooccurrence = db.getTopCooccurrence(options.limit);
 
     if (options.json) {
       console.log(JSON.stringify({ topTools, topCooccurrence }, null, 2));
@@ -89,16 +89,3 @@ export async function statsCommand(options: StatsOptions): Promise<void> {
   }
 }
 
-function getTopCooccurrence(
-  db: ToolStreamDatabase,
-  limit: number
-): Array<{ tool_a_id: string; tool_b_id: string; count: number }> {
-  return db.raw
-    .prepare(
-      `SELECT tool_a_id, tool_b_id, count
-       FROM tool_cooccurrence
-       ORDER BY count DESC
-       LIMIT ?`
-    )
-    .all(limit) as any[];
-}
