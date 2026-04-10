@@ -5,7 +5,7 @@ import { existsSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const MIGRATIONS: Record<number, string[]> = {
   1: [`
@@ -82,6 +82,23 @@ const MIGRATIONS: Record<number, string[]> = {
       last_seen_at INTEGER NOT NULL,
       PRIMARY KEY (tool_a_id, tool_b_id)
     )`,
+  ],
+  4: [
+    `CREATE TABLE IF NOT EXISTS route_traces (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id         TEXT NOT NULL,
+      ts                 INTEGER NOT NULL,
+      query_text         TEXT NOT NULL,
+      context_window     TEXT NOT NULL,
+      strategy_id        TEXT NOT NULL,
+      candidates_json    TEXT NOT NULL,
+      surfaced_tool_ids  TEXT NOT NULL,
+      below_threshold    INTEGER NOT NULL,
+      latency_ms         INTEGER NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_route_traces_session ON route_traces(session_id, ts)`,
+    `CREATE INDEX IF NOT EXISTS idx_route_traces_ts ON route_traces(ts)`,
+    `CREATE INDEX IF NOT EXISTS idx_route_traces_strategy ON route_traces(strategy_id, ts)`,
   ],
 };
 
@@ -424,6 +441,89 @@ export class ToolStreamDatabase {
     return this.db
       .prepare("SELECT DISTINCT tool_id FROM tool_call_events WHERE session_id = ?")
       .all(sessionId) as any[];
+  }
+
+  // --- Route trace operations ---
+
+  insertRouteTrace(trace: {
+    sessionId: string;
+    ts: number;
+    queryText: string;
+    contextWindow: string;
+    strategyId: string;
+    candidatesJson: string;
+    surfacedToolIds: string;
+    belowThreshold: 0 | 1;
+    latencyMs: number;
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO route_traces
+         (session_id, ts, query_text, context_window, strategy_id,
+          candidates_json, surfaced_tool_ids, below_threshold, latency_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        trace.sessionId,
+        trace.ts,
+        trace.queryText,
+        trace.contextWindow,
+        trace.strategyId,
+        trace.candidatesJson,
+        trace.surfacedToolIds,
+        trace.belowThreshold,
+        trace.latencyMs
+      );
+  }
+
+  getRouteTracesBySession(
+    sessionId: string,
+    limit: number
+  ): Array<{
+    id: number;
+    session_id: string;
+    ts: number;
+    query_text: string;
+    context_window: string;
+    strategy_id: string;
+    candidates_json: string;
+    surfaced_tool_ids: string;
+    below_threshold: number;
+    latency_ms: number;
+  }> {
+    return this.db
+      .prepare(
+        `SELECT * FROM route_traces WHERE session_id = ? ORDER BY ts DESC LIMIT ?`
+      )
+      .all(sessionId, limit) as any[];
+  }
+
+  getRouteTracesByStrategy(
+    strategyId: string,
+    sinceMs: number
+  ): Array<{
+    id: number;
+    session_id: string;
+    ts: number;
+    surfaced_tool_ids: string;
+    strategy_id: string;
+  }> {
+    return this.db
+      .prepare(
+        `SELECT id, session_id, ts, surfaced_tool_ids, strategy_id
+         FROM route_traces
+         WHERE strategy_id = ? AND ts >= ?
+         ORDER BY ts DESC`
+      )
+      .all(strategyId, sinceMs) as any[];
+  }
+
+  pruneRouteTraces(retentionDays: number): number {
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    const result = this.db
+      .prepare("DELETE FROM route_traces WHERE ts < ?")
+      .run(cutoff);
+    return result.changes;
   }
 
   close(): void {

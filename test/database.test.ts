@@ -240,3 +240,61 @@ describe("ToolStreamDatabase", () => {
     });
   });
 });
+
+describe("Schema V4 - route_traces", () => {
+  it("creates route_traces table with required columns", () => {
+    const db = new ToolStreamDatabase(":memory:");
+    const cols = (db.raw.prepare("PRAGMA table_info(route_traces)").all() as any[])
+      .map((c) => c.name);
+    expect(cols).toEqual([
+      "id",
+      "session_id",
+      "ts",
+      "query_text",
+      "context_window",
+      "strategy_id",
+      "candidates_json",
+      "surfaced_tool_ids",
+      "below_threshold",
+      "latency_ms",
+    ]);
+    db.close();
+  });
+
+  it("inserts and retrieves a route trace", () => {
+    const db = new ToolStreamDatabase(":memory:");
+    db.insertRouteTrace({
+      sessionId: "sess-1",
+      ts: 1234567890,
+      queryText: "read a file",
+      contextWindow: "turn1\nturn2",
+      strategyId: "baseline",
+      candidatesJson: JSON.stringify([{ tool_id: "fs:read_file", score: 0.9 }]),
+      surfacedToolIds: "fs:read_file",
+      belowThreshold: 0,
+      latencyMs: 5,
+    });
+    const rows = db.getRouteTracesBySession("sess-1", 10);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].strategy_id).toBe("baseline");
+    db.close();
+  });
+
+  it("prunes route traces older than retention", () => {
+    const db = new ToolStreamDatabase(":memory:");
+    const oldTs = Date.now() - 15 * 24 * 60 * 60 * 1000;
+    db.insertRouteTrace({
+      sessionId: "s", ts: oldTs, queryText: "q", contextWindow: "w",
+      strategyId: "baseline", candidatesJson: "[]", surfacedToolIds: "",
+      belowThreshold: 0, latencyMs: 1,
+    });
+    db.insertRouteTrace({
+      sessionId: "s", ts: Date.now(), queryText: "q2", contextWindow: "w",
+      strategyId: "baseline", candidatesJson: "[]", surfacedToolIds: "",
+      belowThreshold: 0, latencyMs: 1,
+    });
+    const deleted = db.pruneRouteTraces(14);
+    expect(deleted).toBe(1);
+    db.close();
+  });
+});
