@@ -70,7 +70,7 @@ const SERVERS: Array<{
 ];
 
 // ---------------------------------------------------------------------------
-// Ground truth: 20 query -> expected toolId pairs
+// Ground truth: 50 query -> expected toolId pairs
 // ---------------------------------------------------------------------------
 
 const GROUND_TRUTH: Array<{ query: string; expectedToolId: string }> = [
@@ -94,6 +94,37 @@ const GROUND_TRUTH: Array<{ query: string; expectedToolId: string }> = [
   { query: "draft an email response", expectedToolId: "email:create_draft" },
   { query: "list all GitHub repositories", expectedToolId: "github:list_repos" },
   { query: "find all Slack channels", expectedToolId: "slack:list_channels" },
+  // Additional 30 pairs
+  { query: "load a text file from the filesystem", expectedToolId: "filesystem:read_file" },
+  { query: "save content to a file", expectedToolId: "filesystem:write_file" },
+  { query: "show files in a folder", expectedToolId: "filesystem:list_directory" },
+  { query: "remove a file from storage", expectedToolId: "filesystem:delete_file" },
+  { query: "find files matching a pattern", expectedToolId: "filesystem:search_files" },
+  { query: "report a bug on GitHub", expectedToolId: "github:create_issue" },
+  { query: "show all my GitHub repos", expectedToolId: "github:list_repos" },
+  { query: "merge changes via pull request", expectedToolId: "github:create_pr" },
+  { query: "look up code on GitHub", expectedToolId: "github:search_code" },
+  { query: "fetch a file from a GitHub repo", expectedToolId: "github:get_file_contents" },
+  { query: "execute a database query", expectedToolId: "database:run_query" },
+  { query: "show all tables in the database", expectedToolId: "database:list_tables" },
+  { query: "get column info for a table", expectedToolId: "database:describe_table" },
+  { query: "add a record to a database table", expectedToolId: "database:insert_row" },
+  { query: "modify an existing database row", expectedToolId: "database:update_row" },
+  { query: "post a message to a Slack channel", expectedToolId: "slack:send_message" },
+  { query: "browse available Slack channels", expectedToolId: "slack:list_channels" },
+  { query: "search Slack for a conversation", expectedToolId: "slack:search_messages" },
+  { query: "attach a file to Slack", expectedToolId: "slack:upload_file" },
+  { query: "compose and send an email", expectedToolId: "email:send_email" },
+  { query: "view emails in my inbox", expectedToolId: "email:list_inbox" },
+  { query: "search emails for a keyword", expectedToolId: "email:search_email" },
+  { query: "write a draft email", expectedToolId: "email:create_draft" },
+  { query: "open and read a local file", expectedToolId: "filesystem:read_file" },
+  { query: "write output to a local file", expectedToolId: "filesystem:write_file" },
+  { query: "create a GitHub pull request to review changes", expectedToolId: "github:create_pr" },
+  { query: "update a row in the database", expectedToolId: "database:update_row" },
+  { query: "search for files on disk", expectedToolId: "filesystem:search_files" },
+  { query: "email someone", expectedToolId: "email:send_email" },
+  { query: "look up emails matching a query", expectedToolId: "email:search_email" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -134,7 +165,7 @@ describe("Routing Quality - Precision@5", () => {
     expect(registry.indexSize).toBe(totalTools);
   });
 
-  it(`Precision@5 >= 0.70 across ${GROUND_TRUTH.length} queries`, async () => {
+  it(`Precision@5 >= 0.80 across ${GROUND_TRUTH.length} queries`, async () => {
     let hits = 0;
     const misses: Array<{ query: string; expected: string; got: string[] }> = [];
 
@@ -165,6 +196,6 @@ describe("Routing Quality - Precision@5", () => {
       `\n[routing-quality] Precision@5 = ${hits}/${GROUND_TRUTH.length} = ${(precision * 100).toFixed(1)}%`
     );
 
-    expect(precision).toBeGreaterThanOrEqual(0.70);
+    expect(precision).toBeGreaterThanOrEqual(0.80);
   }, 60000);
 });

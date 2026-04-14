@@ -12,12 +12,15 @@ Usage:
   toolstream add-server              Add a server to an existing config
   toolstream health                  Check server health from the database
   toolstream doctor [config]         Validate Toolstream setup
-  toolstream stats [--limit N] [--json] [--db path]
+  toolstream stats [--limit N] [--json] [--oracle] [--db path]
                                      Show usage analytics
+  toolstream explain <session-id> [--limit N] [--db path]
+                                     Show route traces for a session
   toolstream --help                  Show this help
 
 Options:
   --ui        Start the web dashboard alongside the proxy
+  --oracle    Show Oracle implicit precision metrics (with stats)
   --help, -h  Show help
 `.trim();
 
@@ -30,6 +33,7 @@ async function main(): Promise<void> {
       limit: { type: "string" },
       json: { type: "boolean", default: false },
       db: { type: "string" },
+      oracle: { type: "boolean", default: false },
     },
     strict: false,
   });
@@ -89,6 +93,22 @@ async function main(): Promise<void> {
       await statsCommand({
         limit: (values as any).limit ? Number((values as any).limit) : 10,
         json: !!(values as any).json,
+        dbPath: (values as any).db || "./toolstream.db",
+        oracle: !!(values as any).oracle,
+      });
+      break;
+    }
+
+    case "explain": {
+      const sessionId = positionals[1];
+      if (!sessionId) {
+        console.error("Usage: toolstream explain <session-id> [--limit N] [--db path]");
+        process.exit(1);
+      }
+      const { explainCommand } = await import("./cli/explain.js");
+      await explainCommand({
+        sessionId,
+        limit: (values as any).limit ? Number((values as any).limit) : 10,
         dbPath: (values as any).db || "./toolstream.db",
       });
       break;

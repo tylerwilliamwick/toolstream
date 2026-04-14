@@ -7,18 +7,52 @@ interface StatsOptions {
   limit: number;
   json: boolean;
   dbPath: string;
+  oracle?: boolean;
+  injectedDb?: ToolStreamDatabase;
 }
 
 export async function statsCommand(options: StatsOptions): Promise<void> {
-  if (!existsSync(options.dbPath)) {
-    process.stderr.write(`Database not found: ${options.dbPath}\n`);
-    process.stderr.write("Run ToolStream at least once to create the database.\n");
-    process.exit(1);
+  let db: ToolStreamDatabase;
+  let close = false;
+
+  if (options.injectedDb) {
+    db = options.injectedDb;
+  } else {
+    if (!existsSync(options.dbPath)) {
+      process.stderr.write(`Database not found: ${options.dbPath}\n`);
+      process.stderr.write("Run ToolStream at least once to create the database.\n");
+      process.exit(1);
+    }
+    db = new ToolStreamDatabase(options.dbPath);
+    close = true;
   }
 
-  const db = new ToolStreamDatabase(options.dbPath);
-
   try {
+    if (options.oracle) {
+      const { Oracle } = await import("../routing/oracle.js");
+      const oracle = new Oracle(db, { implicitWindowTurns: 3, curatedPrecisionGate: 0.80 });
+      const strategyIds = ["baseline", "null_strategy"];
+      console.log("\nOracle: Implicit Precision (rolling 7d)");
+      console.log("=======================================\n");
+      const header = ["Strategy".padEnd(20), "Hits".padStart(6), "Miss".padStart(6), "P@K".padStart(8)].join("  ");
+      console.log(header);
+      console.log("-".repeat(header.length));
+      for (const sid of strategyIds) {
+        const m = oracle.evalRolling7d(sid);
+        console.log(
+          [
+            sid.padEnd(20),
+            String(m.hits).padStart(6),
+            String(m.misses).padStart(6),
+            ((m.precision * 100).toFixed(1) + "%").padStart(8),
+          ].join("  ")
+        );
+      }
+      if (!options.json) {
+        console.log();
+      }
+    }
+
     const topTools = db.getTopTools(options.limit);
     const topCooccurrence = db.getTopCooccurrence(options.limit);
 
@@ -85,7 +119,7 @@ export async function statsCommand(options: StatsOptions): Promise<void> {
 
     process.stdout.write("\n");
   } finally {
-    db.close();
+    if (close) db.close();
   }
 }
 
