@@ -11,6 +11,9 @@ import { SessionManager } from "../session-manager.js";
 import { UpstreamManager } from "../upstream-manager.js";
 import { DependencyResolver } from "../dependency-resolver.js";
 import { ProxyServer } from "../proxy-server.js";
+import { logger } from "../logger.js";
+import { HealthMonitor } from "../health-monitor.js";
+import { TelegramNotifier, formatServerDown, formatServerRecovered } from "../notifications/telegram.js";
 
 export async function startCommand(
   configPath: string,
@@ -19,30 +22,35 @@ export async function startCommand(
   const resolvedPath = resolve(configPath);
 
   if (!existsSync(resolvedPath)) {
-    console.error(`[ToolStream] Config file not found: ${resolvedPath}`);
-    console.error(
+    logger.error(`[ToolStream] Config file not found: ${resolvedPath}`);
+    logger.error(
       "Run 'toolstream init' to create a config file, or specify a path."
     );
     process.exit(1);
   }
 
-  console.error(`[ToolStream] Loading config from ${resolvedPath}`);
+  logger.error(`[ToolStream] Loading config from ${resolvedPath}`);
   const config = loadConfig(resolvedPath);
+
+  // Configure logger from config
+  if (config.logging) {
+    logger.configure(config.logging);
+  }
 
   // Initialize database
   const dbPath = resolve(config.storage.sqlitePath || "./toolstream.db");
-  console.error(`[ToolStream] Opening database at ${dbPath}`);
+  logger.error(`[ToolStream] Opening database at ${dbPath}`);
   const db = new ToolStreamDatabase(dbPath);
 
   // Initialize embedding engine
-  console.error("[ToolStream] Initializing embedding engine...");
+  logger.error("[ToolStream] Initializing embedding engine...");
   const embedEngine = new EmbeddingEngine(
     config.embedding.provider,
     config.embedding.openaiApiKey,
     config.embedding.model
   );
   await embedEngine.initialize();
-  console.error(`[ToolStream] Embedding engine ready (${embedEngine.activeProvider})`);
+  logger.error(`[ToolStream] Embedding engine ready (${embedEngine.activeProvider})`);
 
   // Initialize components
   const registry = new ToolRegistry(db, embedEngine, config.embedding.model);
@@ -53,7 +61,7 @@ export async function startCommand(
     const storedModelId = existingEmbeddings[0].model_id;
     const currentModelId = embedEngine.modelId;
     if (!storedModelId.startsWith(currentModelId.split(":")[0])) {
-      console.error(`[ToolStream] Provider switch detected (${storedModelId} -> ${currentModelId}), re-embedding all tools...`);
+      logger.error(`[ToolStream] Provider switch detected (${storedModelId} -> ${currentModelId}), re-embedding all tools...`);
       db.clearEmbeddings();
       registry.clearVectorIndex();
     }
@@ -64,7 +72,7 @@ export async function startCommand(
   const router = new SemanticRouter(embedEngine, registry, config.routing, config.servers);
   const sessionManager = new SessionManager(
     db,
-    undefined,
+    config.sessionTimeoutMs,
     undefined,
     db,
     registry,
@@ -79,7 +87,7 @@ export async function startCommand(
   const dependencyResolver = new DependencyResolver();
 
   // Connect to upstream servers
-  console.error(
+  logger.error(
     `[ToolStream] Connecting to ${config.servers.length} upstream servers...`
   );
   await upstreamManager.connectAll(config.servers);
@@ -96,14 +104,37 @@ export async function startCommand(
 
   const status = upstreamManager.getServerStatus();
   const healthy = status.filter((s) => s.healthy).length;
-  console.error(
+  logger.error(
     `[ToolStream] ${healthy}/${status.length} servers connected, ${registry.indexSize} tools indexed`
   );
 
   // Prune old analytics events (30-day TTL)
   const pruned = db.pruneOldEvents(30);
   if (pruned > 0) {
-    console.error(`[ToolStream] Pruned ${pruned} analytics events older than 30 days`);
+    logger.error(`[ToolStream] Pruned ${pruned} analytics events older than 30 days`);
+  }
+
+  // Wire HealthMonitor
+  const healthMonitor = new HealthMonitor(upstreamManager, db);
+  healthMonitor.start();
+
+  // Wire TelegramNotifier
+  let telegram: TelegramNotifier | undefined;
+  if (config.notifications?.telegram) {
+    telegram = new TelegramNotifier(config.notifications.telegram);
+    await telegram.initialize();
+
+    upstreamManager.on('server_permanently_failed', (serverId) => {
+      telegram!.notify('server_down', formatServerDown(serverId, 'Permanently failed after max reconnect attempts', 0, 0));
+    });
+
+    healthMonitor.on('server_down', (serverId: string, message: string) => {
+      telegram!.notify('server_down', formatServerDown(serverId, message, 1, 1));
+    });
+
+    healthMonitor.on('server_recovered', (serverId: string, pingMs: number) => {
+      telegram!.notify('server_recovered', formatServerRecovered(serverId, pingMs));
+    });
   }
 
   // Start proxy server
@@ -131,12 +162,14 @@ export async function startCommand(
       upstreamManager,
       config,
     });
-    console.error(`[ToolStream] Dashboard: http://${uiHost}:${uiPort}`);
+    logger.error(`[ToolStream] Dashboard: http://${uiHost}:${uiPort}`);
   }
 
   // Graceful shutdown
   const shutdown = async () => {
-    console.error("\n[ToolStream] Shutting down...");
+    logger.error("\n[ToolStream] Shutting down...");
+    healthMonitor.stop();
+    sessionManager.stopCleanup();
     await proxy.stop();
     db.close();
     process.exit(0);
@@ -144,6 +177,21 @@ export async function startCommand(
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+
+  // Crash handlers
+  process.on("unhandledRejection", async (reason) => {
+    logger.error(`[ToolStream] Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
+    await proxy.stop();
+    sessionManager.stopCleanup();
+    process.exit(1);
+  });
+
+  process.on("uncaughtException", async (err) => {
+    logger.error(`[ToolStream] Uncaught exception: ${err.message}`);
+    await proxy.stop();
+    sessionManager.stopCleanup();
+    process.exit(1);
+  });
 
   await proxy.start();
 }

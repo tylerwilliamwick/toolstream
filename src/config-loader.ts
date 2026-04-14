@@ -129,6 +129,7 @@ export function loadConfig(configPath: string): ToolStreamConfig {
       sqlitePath: String(ts.storage.sqlite_path || "./toolstream.db"),
     },
     servers: parsedServers,
+    sessionTimeoutMs: ts.session_timeout_ms ? Number(ts.session_timeout_ms) : undefined,
     logging: ts.logging ? {
       level: (ts.logging.level || "info") as "error" | "warn" | "info" | "debug",
       file: String(ts.logging.file || "~/.toolstream/logs/toolstream.log"),
