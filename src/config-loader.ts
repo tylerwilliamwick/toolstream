@@ -123,6 +123,9 @@ export function loadConfig(configPath: string): ToolStreamConfig {
       popularityPreloadCount: ts.routing.popularity_preload_count != null
         ? Number(ts.routing.popularity_preload_count)
         : 3,
+      strategies: parseStrategies(ts.routing.strategies),
+      explainer: parseExplainer(ts.routing.explainer),
+      oracle: parseOracle(ts.routing.oracle),
     },
     storage: {
       provider: ts.storage.provider === "pgvector" ? "pgvector" : "sqlite",
@@ -255,6 +258,79 @@ function parseAuthConfig(raw: any, prefix: string): AuthConfig {
   }
 
   return config;
+}
+
+function parseStrategies(raw: any): Array<{ id: string; default?: boolean }> {
+  if (raw == null) {
+    return [{ id: "baseline", default: true }];
+  }
+  if (!Array.isArray(raw)) {
+    throw new ConfigValidationError(
+      "toolstream.routing.strategies",
+      "Must be an array"
+    );
+  }
+  if (raw.length === 0) {
+    return [{ id: "baseline", default: true }];
+  }
+  return raw.map((entry: any, i: number) => {
+    if (!entry.id) {
+      throw new ConfigValidationError(
+        `toolstream.routing.strategies[${i}].id`,
+        "Missing required field"
+      );
+    }
+    return {
+      id: String(entry.id),
+      default: entry.default === true,
+    };
+  });
+}
+
+function parseExplainer(raw: any): {
+  enabled: boolean;
+  traceRetentionDays: number;
+} {
+  if (raw == null) {
+    return { enabled: true, traceRetentionDays: 14 };
+  }
+  const days = raw.trace_retention_days != null ? Number(raw.trace_retention_days) : 14;
+  if (!Number.isFinite(days) || days < 1 || days > 365) {
+    throw new ConfigValidationError(
+      "toolstream.routing.explainer.trace_retention_days",
+      `Must be between 1 and 365, got '${raw.trace_retention_days}'`
+    );
+  }
+  return {
+    enabled: raw.enabled !== false,
+    traceRetentionDays: days,
+  };
+}
+
+function parseOracle(raw: any): {
+  implicitWindowTurns: number;
+  curatedPrecisionGate: number;
+} {
+  if (raw == null) {
+    return { implicitWindowTurns: 3, curatedPrecisionGate: 0.80 };
+  }
+  const window = raw.implicit_window_turns != null
+    ? Number(raw.implicit_window_turns) : 3;
+  const gate = raw.curated_precision_gate != null
+    ? Number(raw.curated_precision_gate) : 0.80;
+  if (!Number.isInteger(window) || window < 1 || window > 100) {
+    throw new ConfigValidationError(
+      "toolstream.routing.oracle.implicit_window_turns",
+      `Must be integer 1-100, got '${raw.implicit_window_turns}'`
+    );
+  }
+  if (!Number.isFinite(gate) || gate < 0 || gate > 1) {
+    throw new ConfigValidationError(
+      "toolstream.routing.oracle.curated_precision_gate",
+      `Must be between 0 and 1, got '${raw.curated_precision_gate}'`
+    );
+  }
+  return { implicitWindowTurns: window, curatedPrecisionGate: gate };
 }
 
 function resolveEnvVar(value: string, fieldPath: string): string {

@@ -1,9 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { loadConfig, ConfigValidationError } from "../src/config-loader.js";
-import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { writeFileSync, unlinkSync, mkdirSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+
+function writeTempYaml(content: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "ts-config-"));
+  const path = join(dir, "toolstream.config.yaml");
+  writeFileSync(path, content);
+  return path;
+}
 
 function tmpConfigPath(): string {
   const dir = join(tmpdir(), "toolstream-test");
@@ -173,5 +180,105 @@ servers: []
     writeFileSync(configPath, "toolstream:\n  transport: [\n  bad yaml here");
     expect(() => loadConfig(configPath)).toThrow(ConfigValidationError);
     expect(() => loadConfig(configPath)).toThrow("Invalid YAML syntax");
+  });
+});
+
+describe("Routing brain v2 config", () => {
+  it("defaults strategies to [{id:'baseline', default:true}] when absent", () => {
+    const yaml = `
+toolstream:
+  transport:
+    stdio: true
+  embedding:
+    provider: local
+    model: all-MiniLM-L6-v2
+  routing:
+    top_k: 5
+    confidence_threshold: 0.3
+    context_window_turns: 3
+  storage:
+    provider: sqlite
+servers:
+  - id: fs
+    name: Filesystem
+    transport: stdio
+    command: echo
+    auth:
+      type: none
+`;
+    const tmpPath = writeTempYaml(yaml);
+    const config = loadConfig(tmpPath);
+    expect(config.routing.strategies).toEqual([{ id: "baseline", default: true }]);
+    expect(config.routing.explainer).toEqual({ enabled: true, traceRetentionDays: 14 });
+    expect(config.routing.oracle).toEqual({ implicitWindowTurns: 3, curatedPrecisionGate: 0.80 });
+  });
+
+  it("parses custom strategies list", () => {
+    const yaml = `
+toolstream:
+  transport:
+    stdio: true
+  embedding:
+    provider: local
+    model: all-MiniLM-L6-v2
+  routing:
+    top_k: 5
+    confidence_threshold: 0.3
+    context_window_turns: 3
+    strategies:
+      - id: baseline
+        default: true
+      - id: null_strategy
+    explainer:
+      enabled: false
+      trace_retention_days: 7
+    oracle:
+      implicit_window_turns: 5
+      curated_precision_gate: 0.85
+  storage:
+    provider: sqlite
+servers:
+  - id: fs
+    name: Filesystem
+    transport: stdio
+    command: echo
+    auth:
+      type: none
+`;
+    const tmpPath = writeTempYaml(yaml);
+    const config = loadConfig(tmpPath);
+    expect(config.routing.strategies).toHaveLength(2);
+    expect(config.routing.strategies?.[1].id).toBe("null_strategy");
+    expect(config.routing.explainer?.enabled).toBe(false);
+    expect(config.routing.oracle?.implicitWindowTurns).toBe(5);
+  });
+
+  it("rejects invalid trace_retention_days", () => {
+    const yaml = `
+toolstream:
+  transport:
+    stdio: true
+  embedding:
+    provider: local
+    model: all-MiniLM-L6-v2
+  routing:
+    top_k: 5
+    confidence_threshold: 0.3
+    context_window_turns: 3
+    explainer:
+      enabled: true
+      trace_retention_days: -1
+  storage:
+    provider: sqlite
+servers:
+  - id: fs
+    name: Filesystem
+    transport: stdio
+    command: echo
+    auth:
+      type: none
+`;
+    const tmpPath = writeTempYaml(yaml);
+    expect(() => loadConfig(tmpPath)).toThrow(/trace_retention_days/);
   });
 });

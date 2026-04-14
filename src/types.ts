@@ -66,6 +66,9 @@ export interface ToolStreamConfig {
     confidenceThreshold: number;
     contextWindowTurns: number;
     popularityPreloadCount?: number;
+    strategies?: RoutingStrategyConfig[];
+    explainer?: ExplainerConfig;
+    oracle?: OracleConfig;
   };
   storage: {
     provider: "sqlite" | "pgvector";
@@ -86,6 +89,21 @@ export interface ToolStreamConfig {
     };
   };
   sessionTimeoutMs?: number;
+}
+
+export interface RoutingStrategyConfig {
+  id: string;
+  default?: boolean;
+}
+
+export interface ExplainerConfig {
+  enabled: boolean;
+  traceRetentionDays: number;
+}
+
+export interface OracleConfig {
+  implicitWindowTurns: number;
+  curatedPrecisionGate: number;
 }
 
 export interface SessionTopicContext {
