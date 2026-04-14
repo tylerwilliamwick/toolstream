@@ -4,6 +4,8 @@
 [![License: MIT](https://img.shields.io/github/license/tylerwilliamwick/toolstream)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 
+AI assistants connected to many services waste most of their token budget just loading tool definitions before you've typed a word. ToolStream fixes this: it sits between your AI client and your services, routing only the tools relevant to each conversation, so you get full capability at a fraction of the cost.
+
 Every time Claude Code starts a conversation, it loads the full list of tools from every connected service. If you have GitHub, Jira, Confluence, and a few other services connected, that can mean 100+ tool definitions sent to the model on every single turn, costing tens of thousands of tokens before you've typed a word.
 
 ToolStream fixes this. It sits between Claude Code and your services, and instead of loading everything upfront, it figures out which tools are relevant based on what you're talking about. If you're discussing a Jira ticket, the Jira tools appear. If you're working with files, the file tools appear. Everything else stays out of the way.
@@ -220,7 +222,7 @@ sqlite3 toolstream.db "SELECT server_id, COUNT(*), SUM(LENGTH(description) + LEN
 
 The 4 meta-tool schemas (`discover_servers`, `discover_tools`, `execute_tool`, `reconnect_server`) are defined in `src/meta-tools.ts`. Their combined description + input schema is 1,393 bytes, measured from the same serialization format.
 
-That's a **98.5% reduction** in tool definition bytes sent per turn (94,677 → 1,393).
+That's a **98.5% reduction** in tool definition bytes sent per turn (94,677 -> 1,393).
 
 ### What this means per conversation
 
