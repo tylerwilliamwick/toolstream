@@ -1,8 +1,9 @@
-// src/semantic-router.ts - Semantic routing with context windowing
+// src/semantic-router.ts - Semantic routing facade, delegates to strategies
 
 import type { EmbeddingEngine } from "./embedding-engine.js";
 import type { ToolRegistry } from "./tool-registry.js";
 import type { RouteResult, ServerConfig, SessionTopicContext, ToolStreamConfig } from "./types.js";
+import { BaselineStrategy } from "./routing/baseline-strategy.js";
 
 export class SemanticRouter {
   private embedEngine: EmbeddingEngine;
@@ -11,6 +12,7 @@ export class SemanticRouter {
   private threshold: number;
   private contextWindowTurns: number;
   private serverTopK: Map<string, number> = new Map();
+  private baseline: BaselineStrategy;
 
   constructor(
     embedEngine: EmbeddingEngine,
@@ -31,47 +33,29 @@ export class SemanticRouter {
         }
       }
     }
+
+    this.baseline = new BaselineStrategy({
+      engine: this.embedEngine,
+      registry: this.registry,
+      topK: this.topK,
+      threshold: this.threshold,
+      contextWindowTurns: this.contextWindowTurns,
+      serverTopK: this.serverTopK,
+    });
   }
 
   async route(
     contextBuffer: string[],
     sessionContext?: SessionTopicContext | null
   ): Promise<RouteResult> {
-    // Degraded mode: embedding engine unavailable, return all tools (pass-through)
-    if (this.embedEngine.isDegraded) {
-      const all = this.registry.getAllActiveTools();
-      return {
-        candidates: all.map(tool => ({ tool, score: 1.0, source: "passthrough" as const })),
-        belowThreshold: false,
-      };
-    }
-
-    const window = contextBuffer.slice(-this.contextWindowTurns);
-    const queryText = window.join("\n").trim();
-    if (!queryText) {
-      return { candidates: [], belowThreshold: true };
-    }
-
-    const queryVector = await this.embedEngine.embed(queryText);
-    let candidates = await this.registry.topKByVector(queryVector, this.topK);
-
-    // Apply session topic bias
-    if (sessionContext && sessionContext.confidence > 0.5) {
-      candidates = candidates.map((c) => {
-        if (c.tool.serverId === sessionContext.dominantServerId) {
-          return { ...c, score: c.score * 1.3 };
-        }
-        return c;
-      });
-      // Re-sort after bias
-      candidates.sort((a, b) => b.score - a.score);
-    }
-
-    const passing = candidates.filter((c) => c.score >= this.threshold);
-
+    const result = await this.baseline.route({
+      sessionId: "legacy",
+      contextBuffer,
+      sessionContext: sessionContext ?? null,
+    });
     return {
-      candidates: passing,
-      belowThreshold: passing.length === 0,
+      candidates: result.candidates,
+      belowThreshold: result.belowThreshold,
     };
   }
 
@@ -82,5 +66,9 @@ export class SemanticRouter {
 
   getTopKForServer(serverId: string): number {
     return this.serverTopK.get(serverId) ?? this.topK;
+  }
+
+  get baselineStrategy(): BaselineStrategy {
+    return this.baseline;
   }
 }
