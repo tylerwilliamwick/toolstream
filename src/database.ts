@@ -6,7 +6,7 @@ import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 import { logger } from "./logger.js";
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 const MIGRATIONS: Record<number, string[]> = {
   1: [`
@@ -168,6 +168,34 @@ const MIGRATIONS: Record<number, string[]> = {
     // Add sessions index
     `CREATE INDEX IF NOT EXISTS idx_sessions_last_active ON sessions(last_active_at)`,
   ],
+  6: [
+    // Fix corrupted FK references from V5 migration.
+    // V5 DROP TABLE + RENAME caused SQLite to rewrite FK targets
+    // in embeddings and tool_cache to "tools_old" instead of "tools".
+    // Recreate both tables with correct FK references.
+    `DROP TABLE IF EXISTS embeddings_fix`,
+    `CREATE TABLE embeddings_fix (
+      tool_id    TEXT PRIMARY KEY REFERENCES tools(id) ON DELETE CASCADE,
+      vector     BLOB NOT NULL,
+      model_id   TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`,
+    `INSERT OR IGNORE INTO embeddings_fix SELECT * FROM embeddings`,
+    `DROP TABLE embeddings`,
+    `ALTER TABLE embeddings_fix RENAME TO embeddings`,
+    `DROP TABLE IF EXISTS tool_cache_fix`,
+    `CREATE TABLE tool_cache_fix (
+      session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      tool_id     TEXT NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+      score       REAL NOT NULL,
+      surfaced_at INTEGER NOT NULL,
+      source      TEXT NOT NULL,
+      PRIMARY KEY (session_id, tool_id)
+    )`,
+    `INSERT OR IGNORE INTO tool_cache_fix SELECT * FROM tool_cache`,
+    `DROP TABLE tool_cache`,
+    `ALTER TABLE tool_cache_fix RENAME TO tool_cache`,
+  ],
 };
 
 export class ToolStreamDatabase {
@@ -228,8 +256,11 @@ export class ToolStreamDatabase {
         .map((row: any) => row.version as number)
     );
 
-    // Disable FK checks during migrations to allow table recreations
+    // Disable FK checks and legacy ALTER TABLE during migrations.
+    // legacy_alter_table = ON prevents SQLite from updating FK references
+    // in dependent tables during DROP + RENAME (which corrupts FK targets).
     this.db.pragma("foreign_keys = OFF");
+    this.db.pragma("legacy_alter_table = ON");
     try {
       for (const [versionStr, statements] of Object.entries(MIGRATIONS)) {
         const version = Number(versionStr);
@@ -254,6 +285,7 @@ export class ToolStreamDatabase {
         }
       }
     } finally {
+      this.db.pragma("legacy_alter_table = OFF");
       this.db.pragma("foreign_keys = ON");
     }
   }
