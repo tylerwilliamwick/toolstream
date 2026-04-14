@@ -3,15 +3,23 @@
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { ToolStreamDatabase } from "../database.js";
+import { loadConfig } from "../config-loader.js";
 
 export async function healthCommand(configPath?: string): Promise<void> {
-  const dbPath = resolve("./toolstream.db");
+  let dbPath = resolve("./toolstream.db");
+
+  if (configPath) {
+    try {
+      const config = loadConfig(configPath);
+      dbPath = resolve(config.storage.sqlitePath);
+    } catch {
+      // Fall through to default
+    }
+  }
 
   if (!existsSync(dbPath)) {
-    console.error("[ToolStream] No database found at ./toolstream.db");
-    console.error(
-      "Run 'toolstream start' first to initialize the database."
-    );
+    process.stderr.write(`[ToolStream] No database found at ${dbPath}\n`);
+    process.stderr.write("Run 'toolstream start' first to initialize the database.\n");
     process.exit(1);
   }
 
@@ -23,17 +31,17 @@ export async function healthCommand(configPath?: string): Promise<void> {
     const now = Date.now();
     const oneHourAgo = now - 60 * 60 * 1000;
 
-    console.log("ToolStream Health Check\n");
-    console.log(`Servers: ${servers.length}`);
-    console.log(`Tools:   ${tools.length}`);
+    process.stdout.write("ToolStream Health Check\n\n");
+    process.stdout.write(`Servers: ${servers.length}\n`);
+    process.stdout.write(`Tools:   ${tools.length}\n`);
 
     let degraded = false;
 
     if (servers.length === 0) {
-      console.log("\nNo servers registered. Run 'toolstream start' to connect.");
+      process.stdout.write("\nNo servers registered. Run 'toolstream start' to connect.\n");
       degraded = true;
     } else {
-      console.log("\nServer Status:");
+      process.stdout.write("\nServer Status:\n");
       for (const server of servers) {
         const lastSync = server.last_synced_at;
         const stale = !lastSync || lastSync < oneHourAgo;
@@ -46,8 +54,8 @@ export async function healthCommand(configPath?: string): Promise<void> {
           ? `${Math.round((now - lastSync) / 60000)} min ago`
           : "never";
 
-        console.log(
-          `  [${icon}] ${server.display_name} (${server.id}): ${server.tool_count} tools, synced ${syncStr} [${status}]`
+        process.stdout.write(
+          `  [${icon}] ${server.display_name} (${server.id}): ${server.tool_count} tools, synced ${syncStr} [${status}]\n`
         );
       }
     }
@@ -56,8 +64,8 @@ export async function healthCommand(configPath?: string): Promise<void> {
     process.exit(degraded ? 1 : 0);
   } catch (err) {
     db.close();
-    console.error(
-      `Error: ${err instanceof Error ? err.message : String(err)}`
+    process.stderr.write(
+      `Error: ${err instanceof Error ? err.message : String(err)}\n`
     );
     process.exit(1);
   }

@@ -44,7 +44,7 @@ async function main(): Promise<void> {
       });
       return;
     }
-    console.log(HELP);
+    process.stdout.write(HELP + "\n");
     return;
   }
 
@@ -72,7 +72,8 @@ async function main(): Promise<void> {
 
     case "health": {
       const { healthCommand } = await import("./cli/health.js");
-      await healthCommand();
+      const configPath = positionals[1];
+      await healthCommand(configPath);
       break;
     }
 
@@ -94,13 +95,13 @@ async function main(): Promise<void> {
     }
 
     default:
-      console.error(`Unknown command: ${subcommand}`);
-      console.log(HELP);
+      process.stderr.write(`Unknown command: ${subcommand}\n`);
+      process.stdout.write(HELP + "\n");
       process.exit(1);
   }
 }
 
 main().catch((err) => {
-  console.error("[ToolStream] Fatal error:", err);
+  process.stderr.write(`[ToolStream] Fatal error: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(1);
 });
