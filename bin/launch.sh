@@ -25,4 +25,34 @@ fi
 export TOOLSETS="${TOOLSETS:-all}"
 
 NODE_BIN="${NODE_BIN:-/opt/homebrew/bin/node}"
-exec "$NODE_BIN" "$TOOLSTREAM_DIR/dist/index.js" start "$TOOLSTREAM_DIR/toolstream.config.local.yaml"
+
+# Crash loop protection: if 5 crashes occur within 60s, sleep 300s
+CRASH_LOG="${TMPDIR:-/tmp}/toolstream_crash_timestamps.log"
+CRASH_THRESHOLD=5
+CRASH_WINDOW=60
+CRASH_SLEEP=300
+
+while true; do
+  "$NODE_BIN" "$TOOLSTREAM_DIR/dist/index.js" start "$TOOLSTREAM_DIR/toolstream.config.local.yaml"
+  EXIT_CODE=$?
+
+  # Record crash timestamp
+  date +%s >> "$CRASH_LOG"
+
+  # Count crashes within the window
+  NOW=$(date +%s)
+  CUTOFF=$((NOW - CRASH_WINDOW))
+  RECENT=$(awk -v c="$CUTOFF" '$1 >= c' "$CRASH_LOG" 2>/dev/null | wc -l | tr -d ' ')
+
+  if [ "${RECENT}" -ge "${CRASH_THRESHOLD}" ]; then
+    echo "[launch.sh] Crash loop detected (${RECENT} crashes in ${CRASH_WINDOW}s). Sleeping ${CRASH_SLEEP}s..." >&2
+    # Truncate log so next window starts fresh after sleep
+    > "$CRASH_LOG"
+    sleep "$CRASH_SLEEP"
+  fi
+
+  # Exit 0 means intentional shutdown (SIGTERM/SIGINT), don't restart
+  if [ "$EXIT_CODE" -eq 0 ]; then
+    exit 0
+  fi
+done
