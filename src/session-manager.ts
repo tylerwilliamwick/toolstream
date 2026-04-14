@@ -12,7 +12,7 @@ export class SessionManager {
   private sessions: Map<string, SessionState> = new Map();
   private db: ToolStreamDatabase;
   private analyticsStore: ToolStreamDatabase | null;
-  private registry: { getToolById(id: string): ToolRecord | null | undefined } | null;
+  private registry: { getToolById(id: string): ToolRecord | null | undefined; getAllActiveTools?(): ToolRecord[] } | null;
   private popularityPreloadCount: number;
   private sessionTimeoutMs: number;
   private maxContextBuffer: number;
@@ -79,6 +79,30 @@ export class SessionManager {
         }
         if (topTools.length > 0) {
           logger.info(`[SessionManager] Pre-loaded ${session.activeSurface.size} popular tools`);
+        } else if (this.registry.getAllActiveTools) {
+          // Cold-start: no analytics yet — seed with top-5 tools per server
+          const allTools = this.registry.getAllActiveTools();
+          const perServer = new Map<string, ToolRecord[]>();
+          for (const tool of allTools) {
+            if (!tool.isActive) continue;
+            const bucket = perServer.get(tool.serverId) ?? [];
+            bucket.push(tool);
+            perServer.set(tool.serverId, bucket);
+          }
+          const COLD_START_PER_SERVER = 5;
+          for (const tools of perServer.values()) {
+            for (const tool of tools.slice(0, COLD_START_PER_SERVER)) {
+              session.activeSurface.set(tool.id, tool);
+              try {
+                this.db.insertToolCache(id, tool.id, 0.5, "cold_start");
+              } catch {
+                // FK constraint; in-memory surface is authoritative
+              }
+            }
+          }
+          if (session.activeSurface.size > 0) {
+            logger.info(`[SessionManager] Cold-start: seeded ${session.activeSurface.size} tools across ${perServer.size} servers`);
+          }
         }
       } catch (err) {
         logger.error(`[SessionManager] Popularity pre-load failed: ${err instanceof Error ? err.message : String(err)}`);

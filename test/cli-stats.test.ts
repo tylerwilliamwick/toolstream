@@ -71,3 +71,51 @@ describe("CLI Stats - getTopCooccurrence", () => {
     expect(typeof row.count).toBe("number");
   });
 });
+
+describe("stats --oracle", () => {
+  const logs: string[] = [];
+  let origLog: typeof console.log;
+
+  beforeEach(() => {
+    logs.length = 0;
+    origLog = console.log;
+    console.log = (...args: unknown[]) => {
+      logs.push(args.join(" "));
+    };
+  });
+
+  afterEach(() => {
+    console.log = origLog;
+  });
+
+  it("prints per-strategy precision metric when --oracle set", async () => {
+    const db = new ToolStreamDatabase(":memory:");
+    db.insertRouteTrace({
+      sessionId: "s1",
+      ts: Date.now() - 1000,
+      queryText: "q",
+      contextWindow: "c",
+      strategyId: "baseline",
+      candidatesJson: "[]",
+      surfacedToolIds: "fs:read_file",
+      belowThreshold: 0,
+      latencyMs: 1,
+    });
+    db.recordToolCall("fs:read_file", "s1", 1);
+
+    const { statsCommand } = await import("../src/cli/stats.js");
+    await statsCommand({
+      limit: 10,
+      json: false,
+      dbPath: ":memory:",
+      oracle: true,
+      injectedDb: db,
+    } as any);
+
+    const combined = logs.join("\n");
+    expect(combined).toMatch(/Oracle/i);
+    expect(combined).toMatch(/baseline/);
+    expect(combined).toMatch(/100\.0%/);
+    db.close();
+  });
+});
