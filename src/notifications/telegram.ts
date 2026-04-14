@@ -1,5 +1,7 @@
 // src/notifications/telegram.ts - Telegram Bot API notifications (zero dependencies)
 
+import { logger } from "../logger.js";
+
 interface TelegramConfig {
   botToken: string;
   chatId: string;
@@ -24,7 +26,7 @@ export class TelegramNotifier {
 
   async initialize(): Promise<void> {
     if (!this.config.botToken || !this.config.chatId) {
-      console.warn("[Telegram] Missing bot_token or chat_id. Notifications disabled.");
+      logger.warn("[Telegram] Missing bot_token or chat_id. Notifications disabled.");
       return;
     }
 
@@ -33,12 +35,12 @@ export class TelegramNotifier {
       const ok = await this.sendRaw("Toolstream started. Telegram notifications active.");
       if (ok) {
         this.enabled = true;
-        console.log("[Telegram] Notifications enabled.");
+        logger.info("[Telegram] Notifications enabled.");
       } else {
-        console.warn("[Telegram] Startup test failed. Notifications disabled.");
+        logger.warn("[Telegram] Startup test failed. Notifications disabled.");
       }
     } catch {
-      console.warn("[Telegram] Could not reach Telegram API. Notifications disabled.");
+      logger.warn("[Telegram] Could not reach Telegram API. Notifications disabled.");
     }
   }
 

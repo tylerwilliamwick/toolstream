@@ -1,6 +1,7 @@
 // src/health-monitor.ts - Periodic health check via MCP ping
 
 import type { UpstreamManager } from "./upstream-manager.js";
+import { logger } from "./logger.js";
 
 export interface HealthMonitorOptions {
   intervalMs?: number; // Default 60000 (60s)
@@ -82,13 +83,13 @@ export class HealthMonitor {
       if (!conn.healthy && !conn.reconnecting) {
         conn.healthy = true;
         this.emit('server_recovered', serverId, pingMs);
-        console.log(`[HealthMonitor] Server '${serverId}' recovered (ping: ${pingMs}ms)`);
+        logger.info(`[HealthMonitor] Server '${serverId}' recovered (ping: ${pingMs}ms)`);
       }
 
       this.emit('ping_success', serverId, pingMs);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn(`[HealthMonitor] Ping failed for '${serverId}': ${message}`);
+      logger.warn(`[HealthMonitor] Ping failed for '${serverId}': ${message}`);
 
       // Only trigger reconnect if not already reconnecting
       if (!conn.reconnecting) {

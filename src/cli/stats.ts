@@ -11,8 +11,8 @@ interface StatsOptions {
 
 export async function statsCommand(options: StatsOptions): Promise<void> {
   if (!existsSync(options.dbPath)) {
-    console.error(`Database not found: ${options.dbPath}`);
-    console.error("Run ToolStream at least once to create the database.");
+    process.stderr.write(`Database not found: ${options.dbPath}\n`);
+    process.stderr.write("Run ToolStream at least once to create the database.\n");
     process.exit(1);
   }
 
@@ -23,43 +23,43 @@ export async function statsCommand(options: StatsOptions): Promise<void> {
     const topCooccurrence = db.getTopCooccurrence(options.limit);
 
     if (options.json) {
-      console.log(JSON.stringify({ topTools, topCooccurrence }, null, 2));
+      process.stdout.write(JSON.stringify({ topTools, topCooccurrence }, null, 2) + "\n");
       return;
     }
 
     // Top tools table
-    console.log("\nTop Tools by Call Count");
-    console.log("======================\n");
+    process.stdout.write("\nTop Tools by Call Count\n");
+    process.stdout.write("======================\n\n");
 
     if (topTools.length === 0) {
-      console.log("  No tool call data yet. Use ToolStream to generate analytics.\n");
+      process.stdout.write("  No tool call data yet. Use ToolStream to generate analytics.\n\n");
     } else {
       const header = [
         "#".padStart(3),
         "Tool".padEnd(40),
         "Calls".padStart(6),
       ].join("  ");
-      console.log(header);
-      console.log("-".repeat(header.length));
+      process.stdout.write(header + "\n");
+      process.stdout.write("-".repeat(header.length) + "\n");
 
       for (let i = 0; i < topTools.length; i++) {
         const t = topTools[i];
-        console.log(
+        process.stdout.write(
           [
             String(i + 1).padStart(3),
             t.tool_id.padEnd(40),
             String(t.call_count).padStart(6),
-          ].join("  ")
+          ].join("  ") + "\n"
         );
       }
     }
 
     // Co-occurrence table
-    console.log("\nTop Co-occurring Tool Pairs");
-    console.log("==========================\n");
+    process.stdout.write("\nTop Co-occurring Tool Pairs\n");
+    process.stdout.write("==========================\n\n");
 
     if (topCooccurrence.length === 0) {
-      console.log("  No co-occurrence data yet.\n");
+      process.stdout.write("  No co-occurrence data yet.\n\n");
     } else {
       const coHeader = [
         "#".padStart(3),
@@ -67,23 +67,23 @@ export async function statsCommand(options: StatsOptions): Promise<void> {
         "Tool B".padEnd(30),
         "Count".padStart(6),
       ].join("  ");
-      console.log(coHeader);
-      console.log("-".repeat(coHeader.length));
+      process.stdout.write(coHeader + "\n");
+      process.stdout.write("-".repeat(coHeader.length) + "\n");
 
       for (let i = 0; i < topCooccurrence.length; i++) {
         const c = topCooccurrence[i];
-        console.log(
+        process.stdout.write(
           [
             String(i + 1).padStart(3),
             c.tool_a_id.padEnd(30),
             c.tool_b_id.padEnd(30),
             String(c.count).padStart(6),
-          ].join("  ")
+          ].join("  ") + "\n"
         );
       }
     }
 
-    console.log();
+    process.stdout.write("\n");
   } finally {
     db.close();
   }

@@ -36,16 +36,14 @@ export async function initCommand(): Promise<void> {
       default: false,
     });
     if (!overwrite) {
-      console.log(
-        "Config not modified. Use 'toolstream add-server' to add servers."
-      );
+      process.stdout.write("Config not modified. Use 'toolstream add-server' to add servers.\n");
       return;
     }
   }
 
   const { input, select, number, confirm } = await getPrompts();
 
-  console.log("\nToolStream Configuration Wizard\n");
+  process.stdout.write("\nToolStream Configuration Wizard\n\n");
 
   // Routing preferences
   const topK = await number({
@@ -71,7 +69,7 @@ export async function initCommand(): Promise<void> {
   let addMore = true;
 
   while (addMore) {
-    console.log(`\n--- Add Server ${servers.length + 1} ---`);
+    process.stdout.write(`\n--- Add Server ${servers.length + 1} ---\n`);
     const server = await promptServer();
     servers.push(server);
 
@@ -98,16 +96,16 @@ export async function initCommand(): Promise<void> {
       } catch {}
     }
   } catch (err) {
-    console.error(
-      `\nValidation failed: ${err instanceof Error ? err.message : String(err)}`
+    process.stderr.write(
+      `\nValidation failed: ${err instanceof Error ? err.message : String(err)}\n`
     );
-    console.error("Config was not written. Please fix the issue and try again.");
+    process.stderr.write("Config was not written. Please fix the issue and try again.\n");
     return;
   }
 
   writeFileSync(configPath, yaml);
-  console.log(`\nConfig written to ${configPath}`);
-  console.log("Run 'toolstream start' to launch the proxy.");
+  process.stdout.write(`\nConfig written to ${configPath}\n`);
+  process.stdout.write("Run 'toolstream start' to launch the proxy.\n");
 }
 
 async function promptServer(): Promise<ServerEntry> {

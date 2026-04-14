@@ -3,6 +3,7 @@
 import type { ToolStreamDatabase } from "./database.js";
 import type { EmbeddingEngine } from "./embedding-engine.js";
 import type { ToolRecord, ScoredTool, ServerRecord } from "./types.js";
+import { logger } from "./logger.js";
 
 const FALLBACK_SCHEMA = { type: "object", properties: {} };
 
@@ -60,7 +61,7 @@ export class ToolRegistry {
       );
       this.vectorIndex.set(emb.tool_id, vector);
     }
-    console.log(
+    logger.info(
       `[ToolRegistry] Loaded ${this.vectorIndex.size} embeddings into memory`
     );
   }
@@ -122,7 +123,7 @@ export class ToolRegistry {
     }
 
     this.db.updateServerSync(serverId, tools.length);
-    console.log(
+    logger.info(
       `[ToolRegistry] Registered ${tools.length} tools from server '${serverId}'`
     );
   }

@@ -4,8 +4,9 @@ import Database from "better-sqlite3";
 import { existsSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
+import { logger } from "./logger.js";
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const MIGRATIONS: Record<number, string[]> = {
   1: [`
@@ -100,10 +101,49 @@ const MIGRATIONS: Record<number, string[]> = {
     `CREATE INDEX IF NOT EXISTS idx_route_traces_ts ON route_traces(ts)`,
     `CREATE INDEX IF NOT EXISTS idx_route_traces_strategy ON route_traces(strategy_id, ts)`,
   ],
+  5: [
+    // Pre-validate: delete orphan tools and embeddings
+    `DELETE FROM tools WHERE server_id NOT IN (SELECT id FROM servers)`,
+    `DELETE FROM embeddings WHERE tool_id NOT IN (SELECT id FROM tools)`,
+    // Recreate tools with FK ON DELETE CASCADE to servers
+    `ALTER TABLE tools RENAME TO tools_old`,
+    `CREATE TABLE tools (
+      id           TEXT PRIMARY KEY,
+      server_id    TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+      tool_name    TEXT NOT NULL,
+      description  TEXT NOT NULL,
+      input_schema TEXT NOT NULL,
+      created_at   INTEGER NOT NULL,
+      updated_at   INTEGER NOT NULL,
+      is_active    INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(server_id, tool_name)
+    )`,
+    `INSERT INTO tools SELECT * FROM tools_old`,
+    `DROP TABLE tools_old`,
+    `CREATE INDEX IF NOT EXISTS idx_tools_server_id ON tools(server_id)`,
+    // Recreate tool_call_events with AUTOINCREMENT PK
+    `ALTER TABLE tool_call_events RENAME TO tool_call_events_old`,
+    `CREATE TABLE tool_call_events (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      tool_id            TEXT NOT NULL,
+      session_id         TEXT NOT NULL,
+      timestamp          INTEGER NOT NULL,
+      sequence_position  INTEGER NOT NULL
+    )`,
+    `INSERT INTO tool_call_events (tool_id, session_id, timestamp, sequence_position)
+     SELECT tool_id, session_id, timestamp, sequence_position FROM tool_call_events_old`,
+    `DROP TABLE tool_call_events_old`,
+    `CREATE INDEX IF NOT EXISTS idx_tool_call_events_tool ON tool_call_events(tool_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tool_call_events_session ON tool_call_events(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tool_call_events_ts ON tool_call_events(timestamp)`,
+    // Add sessions index
+    `CREATE INDEX IF NOT EXISTS idx_sessions_last_active ON sessions(last_active_at)`,
+  ],
 };
 
 export class ToolStreamDatabase {
   private db: Database.Database;
+  private checkpointTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(dbPath: string) {
     const dir = dirname(dbPath);
@@ -117,7 +157,7 @@ export class ToolStreamDatabase {
         testDb.close();
       } catch {
         const corruptPath = `${dbPath}.corrupt.${Date.now()}`;
-        console.warn(
+        logger.warn(
           `[Database] Corrupt database detected, renaming to ${corruptPath}`
         );
         renameSync(dbPath, corruptPath);
@@ -127,7 +167,20 @@ export class ToolStreamDatabase {
     this.db = new Database(dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
+    this.db.pragma("busy_timeout = 5000");
+    this.db.pragma("synchronous = NORMAL");
     this.runMigrations();
+
+    // Periodic WAL checkpoint to keep WAL file size bounded
+    this.checkpointTimer = setInterval(() => {
+      try {
+        this.db.pragma("wal_checkpoint(TRUNCATE)");
+      } catch (err) {
+        logger.warn(
+          `[Database] WAL checkpoint failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }, 60_000);
   }
 
   private runMigrations(): void {
@@ -146,17 +199,33 @@ export class ToolStreamDatabase {
         .map((row: any) => row.version as number)
     );
 
-    for (const [versionStr, statements] of Object.entries(MIGRATIONS)) {
-      const version = Number(versionStr);
-      if (!applied.has(version)) {
-        for (const sql of statements) {
-          this.db.exec(sql);
+    // Disable FK checks during migrations to allow table recreations
+    this.db.pragma("foreign_keys = OFF");
+    try {
+      for (const [versionStr, statements] of Object.entries(MIGRATIONS)) {
+        const version = Number(versionStr);
+        if (!applied.has(version)) {
+          const applyMigration = this.db.transaction(() => {
+            for (const sql of statements) {
+              this.db.exec(sql);
+            }
+            this.db
+              .prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+              .run(version, Date.now());
+          });
+          try {
+            applyMigration();
+            logger.info(`[Database] Applied migration v${version}`);
+          } catch (err) {
+            logger.error(
+              `[Database] Migration v${version} failed, rolling back: ${err instanceof Error ? err.message : String(err)}`
+            );
+            throw err;
+          }
         }
-        this.db
-          .prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
-          .run(version, Date.now());
-        console.log(`[Database] Applied migration v${version}`);
       }
+    } finally {
+      this.db.pragma("foreign_keys = ON");
     }
   }
 
@@ -527,6 +596,15 @@ export class ToolStreamDatabase {
   }
 
   close(): void {
+    if (this.checkpointTimer) {
+      clearInterval(this.checkpointTimer);
+      this.checkpointTimer = null;
+    }
+    try {
+      this.db.pragma("wal_checkpoint(TRUNCATE)");
+    } catch {
+      // Best effort on shutdown
+    }
     this.db.close();
   }
 

@@ -12,15 +12,15 @@ export async function addServerCommand(): Promise<void> {
   const configPath = resolve("toolstream.config.yaml");
 
   if (!existsSync(configPath)) {
-    console.error(
-      "No toolstream.config.yaml found. Run 'toolstream init' first."
+    process.stderr.write(
+      "No toolstream.config.yaml found. Run 'toolstream init' first.\n"
     );
     process.exit(1);
   }
 
   const { input, select } = await getPrompts();
 
-  console.log("\nAdd a new MCP server to your ToolStream config\n");
+  process.stdout.write("\nAdd a new MCP server to your ToolStream config\n\n");
 
   const preset = await select({
     message: "Server type",
@@ -151,17 +151,15 @@ export async function addServerCommand(): Promise<void> {
 
     if (originalHadErrors) {
       // Pre-existing config already had issues (likely env var not set in this shell)
-      console.warn(
-        `\nWarning: ${message}`
+      process.stderr.write(`\nWarning: ${message}\n`);
+      process.stderr.write(
+        "This may be a pre-existing config issue (e.g., env var not set in this shell).\n"
       );
-      console.warn(
-        "This may be a pre-existing config issue (e.g., env var not set in this shell)."
-      );
-      console.warn("The new server was added. Verify your config before starting.\n");
+      process.stderr.write("The new server was added. Verify your config before starting.\n\n");
     } else {
       // The new server block caused the error
-      console.error(`\nValidation failed: ${message}`);
-      console.error("Server was not added. Please fix the issue and try again.");
+      process.stderr.write(`\nValidation failed: ${message}\n`);
+      process.stderr.write("Server was not added. Please fix the issue and try again.\n");
       try {
         const { unlinkSync } = await import("node:fs");
         unlinkSync(tmpPath);
@@ -177,8 +175,8 @@ export async function addServerCommand(): Promise<void> {
     unlinkSync(tmpPath);
   } catch {}
 
-  console.log("\nServer added to toolstream.config.yaml");
-  console.log("Restart ToolStream to pick up the new server.");
+  process.stdout.write("\nServer added to toolstream.config.yaml\n");
+  process.stdout.write("Restart ToolStream to pick up the new server.\n");
 }
 
 interface ServerBlockInput {

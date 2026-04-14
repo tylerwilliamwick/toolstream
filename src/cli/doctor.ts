@@ -90,19 +90,19 @@ export async function runDoctor(configPath: string): Promise<void> {
   });
 
   // Print results
-  console.log("\nToolstream Doctor\n");
+  process.stdout.write("\nToolstream Doctor\n\n");
   let allPassed = true;
   for (const r of results) {
     const icon = r.passed ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
-    console.log(`  ${icon} ${r.name}: ${r.detail}`);
+    process.stdout.write(`  ${icon} ${r.name}: ${r.detail}\n`);
     if (!r.passed) allPassed = false;
   }
-  console.log("");
+  process.stdout.write("\n");
 
   if (allPassed) {
-    console.log("  All checks passed. Ready to start.\n");
+    process.stdout.write("  All checks passed. Ready to start.\n\n");
   } else {
-    console.log("  Some checks failed. Fix the issues above before starting.\n");
+    process.stdout.write("  Some checks failed. Fix the issues above before starting.\n\n");
     process.exit(1);
   }
 }
