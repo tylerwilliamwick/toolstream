@@ -27,7 +27,7 @@ export interface RouteResult {
 export interface ScoredTool {
   tool: ToolRecord;
   score: number;
-  source: "semantic" | "meta_tool" | "startup";
+  source: "semantic" | "meta_tool" | "startup" | "passthrough";
 }
 
 export interface ServerConfig {
@@ -39,6 +39,7 @@ export interface ServerConfig {
   url?: string;
   auth: AuthConfig;
   envPassthrough?: string[]; // Env var names to pass to child process (security: allowlist)
+  timeout_ms?: number; // Per-server tool call timeout in ms (default: 30000)
   routing?: {
     topK?: number; // Per-server override of global top_k (1-20)
   };
@@ -84,6 +85,7 @@ export interface ToolStreamConfig {
       throttleSeconds: number;
     };
   };
+  sessionTimeoutMs?: number;
 }
 
 export interface SessionTopicContext {

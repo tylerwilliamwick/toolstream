@@ -37,6 +37,15 @@ export class SemanticRouter {
     contextBuffer: string[],
     sessionContext?: SessionTopicContext | null
   ): Promise<RouteResult> {
+    // Degraded mode: embedding engine unavailable, return all tools (pass-through)
+    if (this.embedEngine.isDegraded) {
+      const all = this.registry.getAllActiveTools();
+      return {
+        candidates: all.map(tool => ({ tool, score: 1.0, source: "passthrough" as const })),
+        belowThreshold: false,
+      };
+    }
+
     const window = contextBuffer.slice(-this.contextWindowTurns);
     const queryText = window.join("\n").trim();
     if (!queryText) {

@@ -81,7 +81,7 @@ describe("EmbeddingEngine", () => {
 });
 
 describe("EmbeddingEngine initialization failure", () => {
-  it("wraps pipeline errors with user-friendly message", async () => {
+  it("enters degraded mode on pipeline error instead of throwing", async () => {
     const mockPipeline = vi.fn().mockRejectedValue(new Error("network timeout"));
     vi.doMock("@xenova/transformers", () => ({ pipeline: mockPipeline }));
 
@@ -89,12 +89,8 @@ describe("EmbeddingEngine initialization failure", () => {
     const { EmbeddingEngine: MockedEngine } = await import("../src/embedding-engine.js");
     const engine = new MockedEngine("local");
 
-    await expect(engine.initialize()).rejects.toThrow(
-      "Failed to initialize embedding model 'all-MiniLM-L6-v2'"
-    );
-    await expect(engine.initialize()).rejects.toThrow(
-      "internet connection"
-    );
+    await expect(engine.initialize()).resolves.toBeUndefined();
+    expect(engine.isDegraded).toBe(true);
 
     vi.doUnmock("@xenova/transformers");
   });

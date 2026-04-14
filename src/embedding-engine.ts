@@ -1,5 +1,7 @@
 // src/embedding-engine.ts - Embedding inference (local ONNX + OpenAI)
 
+import { logger } from "./logger.js";
+
 const LOCAL_VECTOR_DIM = 384;
 const OPENAI_VECTOR_DIM = 1536; // text-embedding-3-small default
 
@@ -10,6 +12,7 @@ export class EmbeddingEngine {
   private openaiModel: string;
   private vectorDim: number;
   private localFallback: boolean = false;
+  private degraded: boolean = false;
 
   constructor(
     provider: "local" | "openai" = "local",
@@ -24,7 +27,7 @@ export class EmbeddingEngine {
 
   async initialize(): Promise<void> {
     if (this.provider === "openai" && !this.openaiApiKey) {
-      console.warn("[EmbeddingEngine] OpenAI API key missing, falling back to local ONNX");
+      logger.warn("[EmbeddingEngine] OpenAI API key missing, falling back to local ONNX");
       this.provider = "local";
       this.vectorDim = LOCAL_VECTOR_DIM;
     }
@@ -45,21 +48,31 @@ export class EmbeddingEngine {
       if (this.provider !== "openai") {
         this.vectorDim = LOCAL_VECTOR_DIM;
       }
+      this.degraded = false;
     } catch (err) {
-      throw new Error(
-        `Failed to initialize embedding model 'all-MiniLM-L6-v2'. ` +
-        `If this is your first run, ensure you have an internet connection for the initial model download (~90MB). ` +
+      this.degraded = true;
+      this.extractor = null;
+      logger.warn(
+        `[EmbeddingEngine] ONNX init failed, entering degraded pass-through mode. ` +
         `Original error: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }
 
   async embed(text: string): Promise<Float32Array> {
+    if (this.degraded) {
+      // Attempt re-init before giving up
+      await this.initializeLocal();
+      if (this.degraded) {
+        throw new Error("[EmbeddingEngine] Degraded: ONNX unavailable, skipping embedding to prevent zero-vector persistence");
+      }
+    }
+
     if (this.provider === "openai") {
       try {
         return await this.embedOpenAI(text);
       } catch (err) {
-        console.warn(`[EmbeddingEngine] OpenAI embed failed, falling back to local: ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[EmbeddingEngine] OpenAI embed failed, falling back to local: ${err instanceof Error ? err.message : String(err)}`);
         if (!this.extractor) {
           await this.initializeLocal();
           this.vectorDim = LOCAL_VECTOR_DIM;
@@ -85,7 +98,7 @@ export class EmbeddingEngine {
     const vector = new Float32Array(output.data);
     const elapsed = Date.now() - start;
     if (elapsed > 50) {
-      console.warn(`[EmbeddingEngine] embed() took ${elapsed}ms (SLA: 50ms)`);
+      logger.warn(`[EmbeddingEngine] embed() took ${elapsed}ms (SLA: 50ms)`);
     }
     return vector;
   }
@@ -115,11 +128,19 @@ export class EmbeddingEngine {
   }
 
   async embedBatch(texts: string[]): Promise<Float32Array[]> {
+    if (this.degraded) {
+      // Attempt re-init before giving up
+      await this.initializeLocal();
+      if (this.degraded) {
+        throw new Error("[EmbeddingEngine] Degraded: ONNX unavailable, skipping batch embedding to prevent zero-vector persistence");
+      }
+    }
+
     if (this.provider === "openai") {
       try {
         return await this.embedBatchOpenAI(texts);
       } catch (err) {
-        console.warn(`[EmbeddingEngine] OpenAI batch embed failed, falling back to local: ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[EmbeddingEngine] OpenAI batch embed failed, falling back to local: ${err instanceof Error ? err.message : String(err)}`);
         if (!this.extractor) {
           await this.initializeLocal();
           this.vectorDim = LOCAL_VECTOR_DIM;
@@ -200,5 +221,9 @@ export class EmbeddingEngine {
 
   get activeProvider(): "local" | "openai" {
     return this.provider;
+  }
+
+  get isDegraded(): boolean {
+    return this.degraded;
   }
 }
