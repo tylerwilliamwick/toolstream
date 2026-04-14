@@ -140,6 +140,32 @@ describe("SessionManager", () => {
     expect(manager.sessionCount).toBe(2);
   });
 
+  // --- session expiry ---
+
+  it("expireSessions() removes sessions past timeout", () => {
+    const session = manager.createSession();
+    expect(manager.getSession(session.id)).toBeDefined();
+
+    // Backdate lastActiveAt beyond the 5s timeout
+    session.lastActiveAt = Date.now() - 10_000;
+
+    (manager as any).expireSessions();
+
+    expect(manager.getSession(session.id)).toBeUndefined();
+    expect(manager.sessionCount).toBe(0);
+  });
+
+  // --- cold-start with empty analytics ---
+
+  it("createSession() succeeds with analytics store enabled but no events (cold start)", () => {
+    // Pass analyticsStore (db) and preloadCount=3, but DB has no events yet
+    const coldStart = new SessionManager(db, 5000, undefined, db, undefined, 3);
+    const session = coldStart.createSession();
+    expect(session.id).toBeTruthy();
+    expect(session.activeSurface.size).toBe(0);
+    coldStart.stopCleanup();
+  });
+
   describe("context buffer cap", () => {
     it("caps buffer at maxContextBuffer after 100 updates", () => {
       const capped = new SessionManager(db, 5000, 6);

@@ -8,6 +8,7 @@ import {
 } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { ProxyServer } from "../src/proxy-server.js";
 import { ToolStreamDatabase } from "../src/database.js";
 import { EmbeddingEngine } from "../src/embedding-engine.js";
@@ -278,6 +279,20 @@ describe("ProxyServer", () => {
     expect(parsed.error).toBe("tool_not_found");
     expect(parsed.tool_name).toBe("totally_missing_tool");
   });
+
+  it("sends notifications/tools/list_changed after discover_tools surfaces tools", async () => {
+    let notified = false;
+    client.setNotificationHandler(ToolListChangedNotificationSchema, async () => {
+      notified = true;
+    });
+
+    await client.callTool({
+      name: "discover_tools",
+      arguments: { query: "read a file" },
+    });
+
+    expect(notified).toBe(true);
+  }, 30_000);
 
   it("discover_servers returns correct server list", async () => {
     const result = await client.callTool({

@@ -236,4 +236,76 @@ describe("UpstreamManager", () => {
     expect(entry).toBeDefined();
     expect(entry!.toolCount).toBe(2);
   });
+
+  // --- circuit breaker ---
+
+  it("marks server unhealthy after 4 failures within 5 minutes", async () => {
+    const config = makeServerConfig("cb-server", "none");
+    injectFakeConnection(manager, "cb-server", config, true);
+
+    const conn = (manager as any).connections.get("cb-server");
+    conn.client.callTool = vi.fn().mockRejectedValue(new Error("connection reset"));
+
+    // 4 failures — count goes 1, 2, 3, 4 (>3 triggers circuit breaker)
+    for (let i = 0; i < 4; i++) {
+      await expect(manager.callTool("cb-server", "tool", {})).rejects.toThrow();
+    }
+
+    expect(manager.isConnected("cb-server")).toBe(false);
+  });
+
+  // --- reconnect max attempts ---
+
+  it("emits server_permanently_failed after max reconnect attempts exhausted", () => {
+    const config = makeServerConfig("retry-server", "none");
+    injectFakeConnection(manager, "retry-server", config, false);
+
+    const conn = (manager as any).connections.get("retry-server");
+    conn.reconnecting = true;
+
+    const failed: string[] = [];
+    manager.on("server_permanently_failed", (id) => failed.push(id));
+
+    // Call with attempt = MAX_ATTEMPTS (10) — immediately triggers exhaustion path
+    (manager as any).attemptReconnect("retry-server", 10);
+
+    expect(failed).toContain("retry-server");
+    expect(conn.reconnecting).toBe(false);
+  });
+
+  // --- auth 401 ---
+
+  it("throws structured auth_failed JSON on 401 response", async () => {
+    const config = makeServerConfig("auth-server", "none");
+    injectFakeConnection(manager, "auth-server", config, true);
+
+    const conn = (manager as any).connections.get("auth-server");
+    conn.client.callTool = vi.fn().mockRejectedValue(new Error("401 Unauthorized"));
+
+    let thrown: Error | undefined;
+    try {
+      await manager.callTool("auth-server", "tool", {});
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown).toBeDefined();
+    const parsed = JSON.parse(thrown!.message);
+    expect(parsed.error).toBe("auth_failed");
+    expect(parsed.server_id).toBe("auth-server");
+    expect(parsed.http_status).toBe(401);
+  });
+
+  // --- callTool timeout ---
+
+  it("rejects callTool after timeout_ms elapses", async () => {
+    const config: ServerConfig = { ...makeServerConfig("timeout-server", "none"), timeout_ms: 10 };
+    injectFakeConnection(manager, "timeout-server", config, true);
+
+    const conn = (manager as any).connections.get("timeout-server");
+    conn.client.callTool = vi.fn().mockReturnValue(new Promise(() => {})); // never resolves
+
+    await expect(manager.callTool("timeout-server", "any_tool", {}))
+      .rejects.toThrow(/timed out after 10ms/);
+  });
 });
