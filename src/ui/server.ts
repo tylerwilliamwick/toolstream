@@ -19,6 +19,8 @@ interface UIServerOptions {
 }
 
 const startTime = Date.now();
+const SSE_MAX_CONNECTIONS = 5;
+const SSE_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export async function startUIServer(
   options: UIServerOptions
@@ -29,12 +31,21 @@ export async function startUIServer(
   // Fallback to dist-relative path
   const distPublicDir = join(__dirname, "public");
 
+  let sseConnectionCount = 0;
+  const allowedOrigins = new Set([
+    `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
+  ]);
+
   const server = createServer((req, res) => {
     const url = new URL(req.url || "/", `http://${host}:${port}`);
     const path = url.pathname;
 
-    // CORS headers for local development
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // CORS: restrict to local origins only
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.has(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
 
     // API routes
     if (path === "/api/health") {
@@ -136,6 +147,13 @@ export async function startUIServer(
     }
 
     if (path === "/api/events") {
+      if (sseConnectionCount >= SSE_MAX_CONNECTIONS) {
+        res.writeHead(503, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Too many SSE connections" }));
+        return;
+      }
+
+      sseConnectionCount++;
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -153,8 +171,16 @@ export async function startUIServer(
         );
       }, 3000);
 
+      const idleTimer = setTimeout(() => {
+        clearInterval(interval);
+        res.end();
+        sseConnectionCount = Math.max(0, sseConnectionCount - 1);
+      }, SSE_IDLE_TIMEOUT_MS);
+
       req.on("close", () => {
         clearInterval(interval);
+        clearTimeout(idleTimer);
+        sseConnectionCount = Math.max(0, sseConnectionCount - 1);
       });
       return;
     }
