@@ -1,6 +1,6 @@
 {
   "name": "toolstream",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Lazy tool loading MCP proxy with semantic routing",
   "type": "module",
   "main": "dist/index.js",

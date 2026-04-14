@@ -114,7 +114,7 @@ export class ProxyServer {
     this.server = new Server(
       {
         name: "toolstream",
-        version: "2.0.0",
+        version: "3.0.0",
       },
       {
         capabilities: {

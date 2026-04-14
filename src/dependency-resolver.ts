@@ -1,6 +1,7 @@
 // src/dependency-resolver.ts - Tool dependency resolution (warn mode)
 
 import type { ToolRecord } from "./types.js";
+import { logger } from "./logger.js";
 
 const MAX_DEPTH = 2;
 
@@ -23,7 +24,7 @@ export class DependencyResolver {
   resolveDependencies(tool: ToolRecord, depth: number = 0): ToolRecord[] {
     if (depth >= MAX_DEPTH) {
       if (depth === MAX_DEPTH) {
-        console.warn(
+        logger.warn(
           `[DependencyResolver] Max depth (${MAX_DEPTH}) reached for tool '${tool.id}'. Skipping deeper dependencies.`
         );
       }
@@ -73,7 +74,7 @@ export class DependencyResolver {
     visited: Set<string>
   ): ToolRecord[] {
     if (depth >= MAX_DEPTH) {
-      console.warn(
+      logger.warn(
         `[DependencyResolver] Max depth (${MAX_DEPTH}) reached for tool '${tool.id}'. Skipping deeper dependencies.`
       );
       return [];

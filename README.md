@@ -163,6 +163,16 @@ These 4 tools are always visible to the LLM:
 | `execute_tool` | Call any tool on any server directly by name |
 | `reconnect_server` | Force-reconnect a server that has gone offline |
 
+## v3.0 Features
+
+- **Measurement-first routing**: Every routing call emits a `RouteTrace` to SQLite. Run `toolstream explain <session-id>` to see exactly which tools were surfaced, why, and how fast.
+- **Oracle implicit precision**: `toolstream stats --oracle` shows rolling 7-day Precision@K per routing strategy, computed from surfaced tool IDs vs. actual tool calls. No manual labeling required.
+- **Strategy pattern**: Routing strategies (`BaselineStrategy`, `NullStrategy`) are pluggable. `StrategySelector` assigns strategies deterministically by session ID using FNV-1a hash bucketing, enabling live A/B measurement.
+- **Cold-start fix**: Sessions now surface historically popular tools immediately, without waiting for a semantic query.
+- **Per-server timeout**: Set `timeout_ms` on any server entry in the YAML config to cap how long ToolStream waits for that upstream.
+- **Rate limiting**: `maxConcurrentToolCalls` (default: 10) caps parallel tool execution via a semaphore, preventing upstream overload.
+- **Session timeout**: Idle sessions are reaped after a configurable inactivity window, freeing memory on long-running instances.
+
 ## v2.0 Features
 
 - **Usage analytics**: ToolStream tracks which tools you call and how often. Run `toolstream stats` to see a breakdown by server, tool, and time period.

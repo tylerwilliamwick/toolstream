@@ -50,6 +50,10 @@ const MIGRATIONS: Record<number, string[]> = {
       context_buffer TEXT
     );
 
+    -- tool_cache: tracks which tools were surfaced to the LLM per session,
+    -- with relevance score and source (semantic search, popularity pre-load,
+    -- or session-history boost). Used by StrategySelector routing and Oracle
+    -- implicit-precision evaluation.
     CREATE TABLE IF NOT EXISTS tool_cache (
       session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
       tool_id     TEXT NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
@@ -102,12 +106,36 @@ const MIGRATIONS: Record<number, string[]> = {
     `CREATE INDEX IF NOT EXISTS idx_route_traces_strategy ON route_traces(strategy_id, ts)`,
   ],
   5: [
+    // Guard: ensure v1 tables exist in case a partial DB marks v1 as applied
+    // without having created all tables (e.g. legacy or test-constructed DBs).
+    `CREATE TABLE IF NOT EXISTS tools (
+      id           TEXT PRIMARY KEY,
+      server_id    TEXT NOT NULL,
+      tool_name    TEXT NOT NULL,
+      description  TEXT NOT NULL,
+      input_schema TEXT NOT NULL,
+      created_at   INTEGER NOT NULL,
+      updated_at   INTEGER NOT NULL,
+      is_active    INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(server_id, tool_name)
+    )`,
+    `CREATE TABLE IF NOT EXISTS embeddings (
+      tool_id    TEXT PRIMARY KEY REFERENCES tools(id) ON DELETE CASCADE,
+      vector     BLOB NOT NULL,
+      model_id   TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`,
+    // Cleanup leftover temp tables from any prior partial migration attempt
+    `DROP TABLE IF EXISTS tools_new`,
+    `DROP TABLE IF EXISTS tool_call_events_new`,
     // Pre-validate: delete orphan tools and embeddings
     `DELETE FROM tools WHERE server_id NOT IN (SELECT id FROM servers)`,
     `DELETE FROM embeddings WHERE tool_id NOT IN (SELECT id FROM tools)`,
-    // Recreate tools with FK ON DELETE CASCADE to servers
-    `ALTER TABLE tools RENAME TO tools_old`,
-    `CREATE TABLE tools (
+    // Recreate tools with FK ON DELETE CASCADE to servers.
+    // Use create-copy-drop-rename pattern (not rename-original) so that FK
+    // references in embeddings/tool_cache pointing to "tools" are never renamed
+    // and remain valid once the new table takes the "tools" name.
+    `CREATE TABLE tools_new (
       id           TEXT PRIMARY KEY,
       server_id    TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
       tool_name    TEXT NOT NULL,
@@ -118,21 +146,22 @@ const MIGRATIONS: Record<number, string[]> = {
       is_active    INTEGER NOT NULL DEFAULT 1,
       UNIQUE(server_id, tool_name)
     )`,
-    `INSERT INTO tools SELECT * FROM tools_old`,
-    `DROP TABLE tools_old`,
+    `INSERT INTO tools_new SELECT * FROM tools`,
+    `DROP TABLE tools`,
+    `ALTER TABLE tools_new RENAME TO tools`,
     `CREATE INDEX IF NOT EXISTS idx_tools_server_id ON tools(server_id)`,
-    // Recreate tool_call_events with AUTOINCREMENT PK
-    `ALTER TABLE tool_call_events RENAME TO tool_call_events_old`,
-    `CREATE TABLE tool_call_events (
+    // Recreate tool_call_events with AUTOINCREMENT PK (same pattern)
+    `CREATE TABLE tool_call_events_new (
       id                 INTEGER PRIMARY KEY AUTOINCREMENT,
       tool_id            TEXT NOT NULL,
       session_id         TEXT NOT NULL,
       timestamp          INTEGER NOT NULL,
       sequence_position  INTEGER NOT NULL
     )`,
-    `INSERT INTO tool_call_events (tool_id, session_id, timestamp, sequence_position)
-     SELECT tool_id, session_id, timestamp, sequence_position FROM tool_call_events_old`,
-    `DROP TABLE tool_call_events_old`,
+    `INSERT INTO tool_call_events_new (tool_id, session_id, timestamp, sequence_position)
+     SELECT tool_id, session_id, timestamp, sequence_position FROM tool_call_events`,
+    `DROP TABLE tool_call_events`,
+    `ALTER TABLE tool_call_events_new RENAME TO tool_call_events`,
     `CREATE INDEX IF NOT EXISTS idx_tool_call_events_tool ON tool_call_events(tool_id)`,
     `CREATE INDEX IF NOT EXISTS idx_tool_call_events_session ON tool_call_events(session_id)`,
     `CREATE INDEX IF NOT EXISTS idx_tool_call_events_ts ON tool_call_events(timestamp)`,

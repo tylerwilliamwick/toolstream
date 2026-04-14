@@ -2,9 +2,13 @@
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { createRequire } from "node:module";
 import type { ServerConfig, AuthConfig } from "./types.js";
 import type { ToolRegistry } from "./tool-registry.js";
 import { logger } from "./logger.js";
+
+const _require = createRequire(import.meta.url);
+const PROXY_VERSION: string = (_require("../package.json") as { version: string }).version;
 
 export interface UpstreamConnection {
   config: ServerConfig;
@@ -77,7 +81,7 @@ export class UpstreamManager {
       });
 
       const client = new Client(
-        { name: "toolstream-proxy", version: "1.0.0" },
+        { name: "toolstream-proxy", version: PROXY_VERSION },
         { capabilities: {} }
       );
 
@@ -197,7 +201,7 @@ export class UpstreamManager {
     });
 
     const client = new Client(
-      { name: "toolstream-proxy", version: "1.0.0" },
+      { name: "toolstream-proxy", version: PROXY_VERSION },
       { capabilities: {} }
     );
 
@@ -273,7 +277,7 @@ export class UpstreamManager {
       throw new Error(`Server '${serverId}' is in degraded state`);
     }
 
-    const timeoutMs = 30_000;
+    const timeoutMs = conn.config.timeout_ms ?? 30_000;
     try {
       const result = await Promise.race([
         conn.client.callTool({ name: toolName, arguments: args }),
@@ -285,6 +289,23 @@ export class UpstreamManager {
       this.failureCounts.delete(serverId);
       return result;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+
+      // 429 rate limit: skip circuit breaker, return structured error with retry hint
+      if (message.includes("429") || message.toLowerCase().includes("rate limit")) {
+        throw new Error(
+          JSON.stringify({
+            error: "rate_limited",
+            server_id: serverId,
+            http_status: 429,
+            retry_hint: "Server is rate limiting requests. Wait before retrying.",
+          })
+        );
+      }
+
+      // Prune stale failures before circuit-breaker accounting
+      this.pruneStaleFailures();
+
       // Track failures for circuit-breaker logic
       const now = Date.now();
       const existing = this.failureCounts.get(serverId);
@@ -298,8 +319,7 @@ export class UpstreamManager {
         this.failureCounts.set(serverId, { count: 1, firstAt: now });
       }
 
-      // Check if it's an auth error
-      const message = err instanceof Error ? err.message : String(err);
+      // Auth error
       if (message.includes("401") || message.includes("Unauthorized")) {
         throw new Error(
           JSON.stringify({
@@ -310,6 +330,15 @@ export class UpstreamManager {
         );
       }
       throw err;
+    }
+  }
+
+  private pruneStaleFailures(): void {
+    const cutoff = Date.now() - 300_000; // 5 minutes
+    for (const [serverId, data] of this.failureCounts) {
+      if (data.firstAt < cutoff) {
+        this.failureCounts.delete(serverId);
+      }
     }
   }
 
@@ -350,6 +379,12 @@ export class UpstreamManager {
   }
 
   async disconnectAll(): Promise<void> {
+    // Clear all pending reconnect timers
+    for (const timer of this.reconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.reconnectTimers.clear();
+
     for (const [id, conn] of this.connections) {
       try {
         await conn.transport.close();

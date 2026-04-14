@@ -11,7 +11,7 @@ export async function healthCommand(configPath?: string): Promise<void> {
   if (configPath) {
     try {
       const config = loadConfig(configPath);
-      dbPath = resolve(config.storage.sqlitePath);
+      dbPath = resolve(config.storage.sqlitePath ?? dbPath);
     } catch {
       // Fall through to default
     }

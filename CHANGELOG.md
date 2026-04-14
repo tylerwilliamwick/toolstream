@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.0.0] - 2026-04-14
+
+### Added
+- **Strategy pattern (Phase C):** `RoutingStrategy` interface with `BaselineStrategy` and `NullStrategy` implementations; `StrategySelector` uses FNV-1a 32-bit hash bucketing by session ID for deterministic A/B assignment
+- **Route tracing:** `TraceStore` writes one `RouteTrace` per routing call to SQLite (`route_traces` table) asynchronously via `setImmediate`; stores candidates, scores, boosts, and latency
+- **Oracle implicit precision:** `Oracle.evalRolling7d(strategyId)` computes rolling 7-day precision@K from surfaced tool IDs vs. actual tool calls; exposed via `toolstream stats --oracle`
+- **`toolstream explain <session-id>` CLI:** dumps route traces for a session from SQLite; shows strategy, query, surfaced tools, threshold status, and latency per turn
+- **Cold-start fix:** session cold-start now embeds and surfaces popular tools without requiring a prior semantic query
+- **Per-server timeout:** `servers[].timeout_ms` config field passes through to upstream MCP client
+- **Rate limiting:** `Semaphore`-based concurrent tool call cap (`maxConcurrentToolCalls` config field, default 10)
+- **Session timeout:** idle sessions are reaped after configurable inactivity window
+- **P@5 benchmark:** `test/routing-quality.test.ts` with 50 curated query/tool pairs; gate raised to ≥0.80 Precision@5
+- 6 new tests for Oracle, explain CLI (227 total)
+
+### Changed
+- `SemanticRouter` delegates to `BaselineStrategy`; exposes `get baselineStrategy()` accessor
+- `ProxyServer` wired with `StrategySelector` and `TraceStore`; `routeContext` emits a trace per call
+- `start.ts` constructs `StrategySelector` and `TraceStore`, wires into `ProxyServer`, runs prune interval
+- `stats` command accepts `--oracle` flag and `injectedDb` option for testability
+
 ## [2.0.0] - 2026-03-24
 
 ### Added
