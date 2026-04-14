@@ -73,6 +73,38 @@ describe("ToolStreamDatabase", () => {
           last_synced_at INTEGER,
           tool_count INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE tools (
+          id           TEXT PRIMARY KEY,
+          server_id    TEXT NOT NULL,
+          tool_name    TEXT NOT NULL,
+          description  TEXT NOT NULL,
+          input_schema TEXT NOT NULL,
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL,
+          is_active    INTEGER NOT NULL DEFAULT 1,
+          UNIQUE(server_id, tool_name)
+        );
+        CREATE TABLE embeddings (
+          tool_id    TEXT PRIMARY KEY REFERENCES tools(id) ON DELETE CASCADE,
+          vector     BLOB NOT NULL,
+          model_id   TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+        CREATE TABLE sessions (
+          id             TEXT PRIMARY KEY,
+          client_info    TEXT,
+          created_at     INTEGER NOT NULL,
+          last_active_at INTEGER NOT NULL,
+          context_buffer TEXT
+        );
+        CREATE TABLE tool_cache (
+          session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+          tool_id     TEXT NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+          score       REAL NOT NULL,
+          surfaced_at INTEGER NOT NULL,
+          source      TEXT NOT NULL,
+          PRIMARY KEY (session_id, tool_id)
+        );
       `);
       rawDb.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (1, ?)").run(Date.now());
       rawDb.close();
