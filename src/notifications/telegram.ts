@@ -67,14 +67,19 @@ export class TelegramNotifier {
 
   private async sendRaw(text: string): Promise<boolean> {
     const url = `https://api.telegram.org/bot${this.config.botToken}/sendMessage`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: this.config.chatId,
-        text,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: this.config.chatId,
+          text,
+        }),
+      });
+    } catch {
+      throw new Error("Telegram network error");
+    }
     return response.ok;
   }
 
