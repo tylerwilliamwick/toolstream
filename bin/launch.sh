@@ -21,5 +21,8 @@ if [ -z "$GITHUB_PERSONAL_ACCESS_TOKEN" ]; then
   export GITHUB_PERSONAL_ACCESS_TOKEN
 fi
 
+# Enable all tool sets for mcp-atlassian v0.22.0+ (prevents 72→6 tool drop)
+export TOOLSETS="${TOOLSETS:-all}"
+
 NODE_BIN="${NODE_BIN:-/opt/homebrew/bin/node}"
 exec "$NODE_BIN" "$TOOLSTREAM_DIR/dist/index.js" start "$TOOLSTREAM_DIR/toolstream.config.local.yaml"
