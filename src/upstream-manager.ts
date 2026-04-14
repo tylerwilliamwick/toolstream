@@ -30,6 +30,7 @@ export class UpstreamManager {
   private registry: ToolRegistry;
   private failureCounts: Map<string, { count: number; firstAt: number }> = new Map();
   private eventListeners: Map<string, Array<(serverId: string) => void>> = new Map();
+  private reconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor(registry: ToolRegistry) {
     this.registry = registry;
@@ -162,17 +163,18 @@ export class UpstreamManager {
     }
 
     const delay = Math.min(1000 * Math.pow(2, attempt), 30000); // 1s, 2s, 4s... max 30s
-    logger.warn(`[UpstreamManager] Reconnecting to '${serverId}' in ${delay}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
 
-    setTimeout(async () => {
+    const timer = setTimeout(async () => {
+      this.reconnectTimers.delete(serverId);
       try {
         await this.reconnect(serverId);
-        logger.info(`[UpstreamManager] Reconnected to '${serverId}' successfully`);
+        logger.info(`[UpstreamManager] Reconnected to '${serverId}' (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
       } catch (err) {
-        logger.error(`[UpstreamManager] Reconnect attempt ${attempt + 1} failed for '${serverId}': ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[UpstreamManager] Reconnect ${attempt + 1}/${MAX_ATTEMPTS} failed for '${serverId}': ${err instanceof Error ? err.message : String(err)}`);
         this.attemptReconnect(serverId, attempt + 1);
       }
     }, delay);
+    this.reconnectTimers.set(serverId, timer);
   }
 
   private async reconnect(serverId: string): Promise<void> {
@@ -230,6 +232,7 @@ export class UpstreamManager {
 
     // Re-sync tools (skip embedBatch for tools that already have embeddings)
     await this.syncTools(serverId);
+    this.emit('tools_resynced', serverId);
   }
 
   async syncTools(serverId: string): Promise<void> {

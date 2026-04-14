@@ -73,6 +73,9 @@ export async function startCommand(
   sessionManager.startCleanup();
 
   const upstreamManager = new UpstreamManager(registry);
+  upstreamManager.on('tools_resynced', (serverId) => {
+    sessionManager.invalidateServerTools(serverId);
+  });
   const dependencyResolver = new DependencyResolver();
 
   // Connect to upstream servers

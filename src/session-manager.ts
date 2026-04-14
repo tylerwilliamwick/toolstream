@@ -6,7 +6,7 @@ import type { SessionState, ToolRecord, ScoredTool, SessionTopicContext } from "
 import { META_TOOL_SCHEMAS } from "./meta-tools.js";
 import { logger } from "./logger.js";
 
-const DEFAULT_SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 export class SessionManager {
   private sessions: Map<string, SessionState> = new Map();
@@ -165,7 +165,7 @@ export class SessionManager {
         // Check for collision with already-added tools
         const existing = tools.find(t => t.name === namespacedName);
         if (existing) {
-          console.warn(`[SessionManager] Tool name collision: '${namespacedName}' from server '${tool.serverId}' conflicts with existing tool`);
+          logger.warn(`[SessionManager] Tool name collision: '${namespacedName}' from server '${tool.serverId}' conflicts with existing tool`);
           continue; // skip duplicate
         }
         tools.push({
@@ -266,8 +266,19 @@ export class SessionManager {
 
     if (expired.length > 0) {
       this.db.deleteExpiredSessions(this.sessionTimeoutMs);
-      console.log(`[SessionManager] Expired ${expired.length} sessions`);
+      logger.info(`[SessionManager] Expired ${expired.length} sessions`);
     }
+  }
+
+  invalidateServerTools(serverId: string): void {
+    for (const [, session] of this.sessions) {
+      for (const [toolId, tool] of session.activeSurface) {
+        if (tool.serverId === serverId) {
+          session.activeSurface.delete(toolId);
+        }
+      }
+    }
+    logger.info(`[SessionManager] Invalidated surface tools for server '${serverId}'`);
   }
 
   get sessionCount(): number {
