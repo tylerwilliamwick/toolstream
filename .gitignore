@@ -10,3 +10,4 @@ toolstream.config.yaml
 toolstream.config.local.yaml
 .claude/
 *.local.json
+toolstream.db.backup.v2
