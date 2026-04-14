@@ -26,12 +26,19 @@ toolstream:
     provider: "sqlite"
     sqlite_path: "${join(tmpDir, "test.db")}"
 
-servers: []
+servers:
+  - id: "test-server"
+    name: "Test Server"
+    transport: "stdio"
+    command: "echo"
+    args: ["hello"]
+    auth:
+      type: "none"
 `);
 
-    // Load config - should not throw even with empty servers
+    // Load config - at least one server required
     const config = loadConfig(configPath);
-    expect(config.servers).toHaveLength(0);
+    expect(config.servers).toHaveLength(1);
 
     // Verify meta-tools are always available
     // (Full proxy startup requires the embedding engine which needs the model)

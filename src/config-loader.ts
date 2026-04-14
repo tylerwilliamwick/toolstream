@@ -83,12 +83,20 @@ export function loadConfig(configPath: string): ToolStreamConfig {
     throw new ConfigValidationError("servers", "Missing required array 'servers'");
   }
   if (servers.length === 0) {
-    logger.warn("No servers configured. Toolstream will start with meta-tools only.");
+    throw new ConfigValidationError("servers", "At least one server must be configured");
   }
 
   const parsedServers: ServerConfig[] = servers.map(
     (s: any, i: number) => parseServerConfig(s, i)
   );
+
+  const seenIds = new Set<string>();
+  for (const s of parsedServers) {
+    if (seenIds.has(s.id)) {
+      throw new ConfigValidationError("servers", `Duplicate server id '${s.id}'`);
+    }
+    seenIds.add(s.id);
+  }
 
   return {
     transport: {

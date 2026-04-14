@@ -147,18 +147,26 @@ servers: []
     expect(() => loadConfig(configPath)).toThrow("provider");
   });
 
-  it("warns but does not throw for empty servers array", () => {
+  it("throws for empty servers array", () => {
     const emptyServers = VALID_CONFIG.replace(
       /servers:\n.*- id.*\n.*name.*\n.*transport.*\n.*command.*\n.*args.*\n.*auth.*\n.*type.*\n/s,
       "servers: []\n"
     );
-    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     writeFileSync(configPath, emptyServers);
-    expect(() => loadConfig(configPath)).not.toThrow();
-    expect(stderrSpy).toHaveBeenCalledWith(
-      expect.stringContaining("No servers configured")
-    );
-    stderrSpy.mockRestore();
+    expect(() => loadConfig(configPath)).toThrow("At least one server must be configured");
+  });
+
+  it("throws for duplicate server ids", () => {
+    const dupServers = VALID_CONFIG + `  - id: "fs"
+    name: "Filesystem Duplicate"
+    transport: "stdio"
+    command: "echo"
+    args: ["dup"]
+    auth:
+      type: "none"
+`;
+    writeFileSync(configPath, dupServers);
+    expect(() => loadConfig(configPath)).toThrow("Duplicate server id 'fs'");
   });
 
   it("throws ConfigValidationError with user-friendly message for malformed YAML", () => {
