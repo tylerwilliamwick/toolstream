@@ -11,6 +11,10 @@ import { SessionManager } from "../session-manager.js";
 import { UpstreamManager } from "../upstream-manager.js";
 import { DependencyResolver } from "../dependency-resolver.js";
 import { ProxyServer } from "../proxy-server.js";
+import { BaselineStrategy } from "../routing/baseline-strategy.js";
+import { NullStrategy } from "../routing/null-strategy.js";
+import { StrategySelector } from "../routing/strategy-selector.js";
+import { TraceStore } from "../routing/trace-store.js";
 import { logger } from "../logger.js";
 import { HealthMonitor } from "../health-monitor.js";
 import { TelegramNotifier, formatServerDown, formatServerRecovered } from "../notifications/telegram.js";
@@ -137,6 +141,19 @@ export async function startCommand(
     });
   }
 
+  // Build StrategySelector + TraceStore
+  const baselineStrategy = router.baselineStrategy;
+  const nullStrategy = new NullStrategy();
+  const strategyConfigs = config.routing.strategies ?? [{ id: "baseline", default: true }];
+  const strategies = ([baselineStrategy, nullStrategy] as const).filter((s) =>
+    strategyConfigs.some((c) => c.id === s.id)
+  );
+  const strategySelector = new StrategySelector(strategies, strategyConfigs);
+  const traceStore = new TraceStore(
+    db,
+    config.routing.explainer?.traceRetentionDays ?? 14
+  );
+
   // Start proxy server
   const proxy = new ProxyServer(
     config,
@@ -145,8 +162,18 @@ export async function startCommand(
     registry,
     upstreamManager,
     dependencyResolver,
-    db
+    db,
+    strategySelector,
+    traceStore
   );
+
+  // Prune old route traces periodically
+  setInterval(() => {
+    const pruned = traceStore.prune();
+    if (pruned > 0) {
+      logger.info(`[TraceStore] Pruned ${pruned} expired traces`);
+    }
+  }, 60_000);
 
   // Start UI server if requested
   if (options.ui) {

@@ -14,6 +14,8 @@ import type { ToolRegistry } from "./tool-registry.js";
 import type { UpstreamManager } from "./upstream-manager.js";
 import type { DependencyResolver } from "./dependency-resolver.js";
 import type { ToolStreamDatabase } from "./database.js";
+import type { StrategySelector } from "./routing/strategy-selector.js";
+import type { TraceStore } from "./routing/trace-store.js";
 import { isMetaTool } from "./meta-tools.js";
 import { logger } from "./logger.js";
 
@@ -71,6 +73,8 @@ export class ProxyServer {
   private dependencyResolver: DependencyResolver;
   private db: ToolStreamDatabase | null;
   private config: ToolStreamConfig;
+  private strategySelector: StrategySelector | null;
+  private traceStore: TraceStore | null;
   private currentSessionId: string | null = null;
   // 1.18: tracks call sequence per session (cleaned up on expiry/stop)
   private sessionCallSequence: Map<string, number> = new Map();
@@ -88,7 +92,9 @@ export class ProxyServer {
     registry: ToolRegistry,
     upstreamManager: UpstreamManager,
     dependencyResolver: DependencyResolver,
-    db?: ToolStreamDatabase
+    db?: ToolStreamDatabase,
+    strategySelector?: StrategySelector,
+    traceStore?: TraceStore
   ) {
     this.config = config;
     this.sessionManager = sessionManager;
@@ -97,6 +103,8 @@ export class ProxyServer {
     this.upstreamManager = upstreamManager;
     this.dependencyResolver = dependencyResolver;
     this.db = db ?? null;
+    this.strategySelector = strategySelector ?? null;
+    this.traceStore = traceStore ?? null;
     // 1.24: configurable concurrency limit (default 10)
     const maxConcurrent =
       ((config as unknown) as Record<string, unknown>)
@@ -543,15 +551,27 @@ export class ProxyServer {
 
       this.sessionManager.updateContext(this.currentSessionId, contextText);
 
-      const sessionContext = this.sessionManager.getSessionContext(
-        this.currentSessionId
-      );
-      const result = await this.semanticRouter.route(
-        this.sessionManager.getSession(this.currentSessionId)
-          ?.contextBuffer || [],
-        sessionContext
-      );
+      const sessionContext = this.sessionManager.getSessionContext(this.currentSessionId);
+      const contextBuffer = this.sessionManager.getSession(this.currentSessionId)?.contextBuffer || [];
 
+      if (this.strategySelector && this.traceStore) {
+        const strategy = this.strategySelector.pick(this.currentSessionId);
+        const result = await strategy.route({
+          sessionId: this.currentSessionId,
+          contextBuffer,
+          sessionContext,
+        });
+        this.traceStore.write(result.trace);
+
+        if (!result.belowThreshold && result.candidates.length > 0) {
+          this.sessionManager.surfaceTools(this.currentSessionId, result.candidates);
+          await this.notifyToolsChanged();
+        }
+        return;
+      }
+
+      // Legacy path (no strategy selector provided)
+      const result = await this.semanticRouter.route(contextBuffer, sessionContext);
       if (!result.belowThreshold && result.candidates.length > 0) {
         this.sessionManager.surfaceTools(
           this.currentSessionId,

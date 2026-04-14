@@ -6,6 +6,8 @@ import {
   beforeEach,
   afterEach,
 } from "vitest";
+import { StrategySelector } from "../src/routing/strategy-selector.js";
+import { TraceStore } from "../src/routing/trace-store.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -316,4 +318,68 @@ describe("ProxyServer", () => {
       expect(entry).toHaveProperty("tool_count");
     }
   });
+});
+
+describe("ProxyServer route trace emission", () => {
+  let embedEngine: EmbeddingEngine;
+
+  beforeAll(async () => {
+    embedEngine = new EmbeddingEngine("local");
+    await embedEngine.initialize();
+  }, 60_000);
+
+  it("emits a route trace on routeContext call", async () => {
+    const db = new ToolStreamDatabase(":memory:");
+    const registry = new ToolRegistry(db, embedEngine);
+    const sessionManager = new SessionManager(db, 300_000);
+    const semanticRouter = new SemanticRouter(embedEngine, registry, TEST_CONFIG.routing);
+    const dependencyResolver = new DependencyResolver();
+    const upstreamManager = new StubUpstreamManager(["fs"]);
+
+    db.insertServer("fs", "Filesystem", "stdio");
+    await registry.registerTools("fs", TEST_TOOLS);
+
+    const strategySelector = new StrategySelector(
+      [semanticRouter.baselineStrategy],
+      [{ id: "baseline", default: true }]
+    );
+    const traceStore = new TraceStore(db, 14);
+
+    const proxyServer = new ProxyServer(
+      TEST_CONFIG,
+      sessionManager,
+      semanticRouter,
+      registry,
+      upstreamManager as any,
+      dependencyResolver,
+      db,
+      strategySelector,
+      traceStore
+    );
+
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    const testClient = new Client(
+      { name: "trace-test-client", version: "1.0.0" },
+      { capabilities: {} }
+    );
+    await proxyServer.start(serverTransport);
+    await testClient.connect(clientTransport);
+
+    // Trigger session creation
+    await testClient.listTools();
+
+    const sessionId = (proxyServer as any).currentSessionId as string;
+    await proxyServer.routeContext("read a file from disk");
+
+    // Allow setImmediate to flush
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const traces = db.getRouteTracesBySession(sessionId, 10);
+    expect(traces.length).toBeGreaterThan(0);
+    expect(traces[0].strategy_id).toBe("baseline");
+
+    await testClient.close();
+    await proxyServer.stop();
+    db.close();
+  }, 30_000);
 });
