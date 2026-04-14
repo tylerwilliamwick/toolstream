@@ -4,6 +4,16 @@ import type { ToolStreamDatabase } from "./database.js";
 import type { EmbeddingEngine } from "./embedding-engine.js";
 import type { ToolRecord, ScoredTool, ServerRecord } from "./types.js";
 
+const FALLBACK_SCHEMA = { type: "object", properties: {} };
+
+function parseInputSchema(raw: string): Record<string, unknown> {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return FALLBACK_SCHEMA;
+  }
+}
+
 export class ToolRegistry {
   private db: ToolStreamDatabase;
   private embedEngine: EmbeddingEngine;
@@ -146,7 +156,7 @@ export class ToolRegistry {
           serverId: row.server_id,
           toolName: row.tool_name,
           description: row.description,
-          inputSchema: JSON.parse(row.input_schema),
+          inputSchema: parseInputSchema(row.input_schema),
           isActive: row.is_active === 1,
         },
         score,
@@ -165,7 +175,7 @@ export class ToolRegistry {
       serverId: row.server_id,
       toolName: row.tool_name,
       description: row.description,
-      inputSchema: JSON.parse(row.input_schema),
+      inputSchema: parseInputSchema(row.input_schema),
       isActive: row.is_active === 1,
     };
   }
@@ -190,7 +200,7 @@ export class ToolRegistry {
       serverId: row.server_id,
       toolName: row.tool_name,
       description: row.description,
-      inputSchema: JSON.parse(row.input_schema),
+      inputSchema: parseInputSchema(row.input_schema),
       isActive: true,
     }));
   }
